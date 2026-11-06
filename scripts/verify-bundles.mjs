@@ -1,4 +1,11 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -42,13 +49,6 @@ if (platform === "windows") {
   ) {
     throw new Error("The Linux binary is not x86_64 ELF");
   }
-} else if (
-  run("lipo", [
-    "-archs",
-    join(bundle, "macos", "boostman.app", "Contents", "MacOS", "boostman"),
-  ]) !== "x86_64"
-) {
-  throw new Error("The macOS application must contain only x86_64");
 }
 const checksums = [];
 for (const [format, extension] of Object.entries(config.formats)) {
@@ -59,6 +59,31 @@ for (const [format, extension] of Object.entries(config.formats)) {
   if (!files.length) throw new Error(`No ${format} installer was generated`);
   for (const name of files) {
     const path = join(directory, name);
+    if (format === "dmg") {
+      // Tauri removes the staging .app after DMG packaging. Inspect the shipped image itself.
+      const mount = mkdtempSync(join(tmpdir(), "boostman-dmg-"));
+      let attached = false;
+      try {
+        run("hdiutil", [
+          "attach",
+          path,
+          "-readonly",
+          "-nobrowse",
+          "-mountpoint",
+          mount,
+        ]);
+        attached = true;
+        const arch = run("lipo", [
+          "-archs",
+          join(mount, "boostman.app", "Contents", "MacOS", "boostman"),
+        ]);
+        if (arch !== "x86_64")
+          throw new Error("The macOS installer must contain only x86_64");
+      } finally {
+        if (attached) run("hdiutil", ["detach", mount]);
+        rmSync(mount, { recursive: true, force: true });
+      }
+    }
     if (
       format === "deb" &&
       run("dpkg-deb", ["--field", path, "Architecture"]) !== "amd64"
