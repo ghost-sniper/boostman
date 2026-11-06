@@ -20,6 +20,20 @@ npm run tauri build
 
 `npm run dev` 只启动界面预览，不提供浏览器网络执行或工作区保存。实际请求、SQL、FQL 和脚本都通过桌面 Rust 核心执行。`package-lock.json` 和 `src-tauri/Cargo.lock` 固定依赖。
 
+## GitHub Actions 构建
+
+工作流 `.github/workflows/build.yml` 在推送 `main`、`v*` 标签、针对 `main` 的 PR 或手动运行时执行。使用 Node.js 24 和 Rust 1.99.1，先检查格式、前端类型与构建、连接配置及安装包校验测试、Rust 检查和核心测试，再以 Release O3 + LTO 构建安装包。
+
+| 平台    | 构建目标（仅 x86_64）      | 安装包             | Actions Artifact          |
+| ------- | -------------------------- | ------------------ | ------------------------- |
+| Windows | `x86_64-pc-windows-msvc`   | MSI、NSIS 安装 EXE | `boostman-windows-x86_64` |
+| Linux   | `x86_64-unknown-linux-gnu` | deb、rpm           | `boostman-linux-x86_64`   |
+| macOS   | `x86_64-apple-darwin`      | DMG                | `boostman-macos-x86_64`   |
+
+在仓库 Actions 的对应运行页面下载 Artifact，默认保留 14 天，每个平台包含 `SHA256SUMS.txt`。上传前检查所需包格式、程序的实际 CPU 架构，以及 deb/rpm 的架构元信息；不生成 ARM 或 Universal 包。macOS 明确使用 Intel runner，包采用 ad-hoc 签名，尚未配置 Apple 开发者证书或公证；Windows 安装包也未配置发布者签名。工作流不会自动创建 GitHub Release。
+
+CI 不连接业务数据库，也不包含数据库密码；需外部服务的集成测试保持默认忽略。Oracle Instant Client 仍由使用 Oracle 功能的目标机器提供，不随安装包分发。
+
 ## 使用
 
 1. 在“请求”中新建 HTTP 请求，或点击“＋ SQL”新建 SQL 请求。配置好后发送，底部查看 JSON、原文、Headers、断言、日志和执行记录。
