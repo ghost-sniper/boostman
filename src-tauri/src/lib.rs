@@ -2,6 +2,7 @@
 mod database_tests;
 mod db_config;
 mod engine;
+mod flow_blocks;
 mod fql;
 mod http;
 mod oracle_adapter;

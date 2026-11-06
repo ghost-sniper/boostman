@@ -13,6 +13,7 @@ export function RequestSidebar({
   onFolder,
   onAddRequest,
   onAddFolder,
+  onImport,
   disabled,
 }: {
   requests: Request[];
@@ -26,6 +27,7 @@ export function RequestSidebar({
   onFolder: (id: string | null) => void;
   onAddRequest: () => void;
   onAddFolder: () => void;
+  onImport: () => void;
   disabled: boolean;
 }) {
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -138,6 +140,11 @@ export function RequestSidebar({
         <button disabled={disabled} onClick={onAddFolder}>
           ＋ 目录
         </button>
+        {kind === "http" && (
+          <button disabled={disabled} onClick={onImport}>
+            导入 cURL
+          </button>
+        )}
       </div>
       <div className="sidebar-items request-tree">
         <button

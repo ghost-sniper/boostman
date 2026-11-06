@@ -115,27 +115,47 @@ jobs:
       - name: Check installer formats and CPU architecture
         run: node scripts/verify-bundles.mjs ${{ matrix.platform }} ${{ matrix.target }}
 
-      - name: Upload Windows installers
+      - name: Upload Windows MSI installer
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: boostman-windows-x86_64
+          name: boostman-windows-x86_64-msi
           path: |
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
-            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/SHA256SUMS.txt
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 
-      - name: Upload Linux installers
+      - name: Upload Windows EXE installer
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: boostman-windows-x86_64-exe
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux DEB installer
         if: matrix.platform == 'linux'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: boostman-linux-x86_64
+          name: boostman-linux-x86_64-deb
           path: |
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux RPM installer
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: boostman-linux-x86_64-rpm
+          path: |
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/SHA256SUMS.txt
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -143,9 +163,9 @@ jobs:
         if: matrix.platform == 'macos'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: boostman-macos-x86_64
+          name: boostman-macos-x86_64-dmg
           path: |
             src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/SHA256SUMS.txt
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14

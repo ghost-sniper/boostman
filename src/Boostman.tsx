@@ -9,8 +9,10 @@ import {
 } from "./components";
 import { CollectionEditor } from "./CollectionEditor";
 import { FlowEditor } from "./FlowEditor";
+import { flowResults } from "./flowPresentation";
 import { ConnectionEditor } from "./ConnectionEditor";
 import { RequestSidebar } from "./RequestSidebar";
+import { HttpTransferDialog } from "./HttpTransferDialog";
 import { RequestFolderEditor } from "./RequestFolderEditor";
 import {
   folderChoices,
@@ -46,6 +48,8 @@ const names: Record<Section, string> = {
   environments: "环境与凭据",
 };
 export default function Boostman() {
+  const [resultsCollapsed, setResultsCollapsed] = useState(false);
+  const [transfer, setTransfer] = useState<"import" | "export" | null>(null);
   const [requestKind, setRequestKind] = useState<Request["kind"]>("http");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [runTarget, setRunTarget] = useState("");
@@ -363,6 +367,7 @@ export default function Boostman() {
               disabled={running || !loaded}
               onAddRequest={() => add()}
               onAddFolder={addFolder}
+              onImport={() => setTransfer("import")}
               onRequest={(r) => {
                 setSelected(r.id);
                 setActiveFolderId(r.folderId || null);
@@ -537,6 +542,14 @@ export default function Boostman() {
                   {dirty && <span className="dirty-dot" />}
                 </div>
                 <div className="document-actions">
+                  {section === "requests" && current.kind === "http" && (
+                    <button
+                      disabled={running}
+                      onClick={() => setTransfer("export")}
+                    >
+                      导出请求
+                    </button>
+                  )}
                   {section === "requests" && (
                     <span className="badge">
                       {current.kind === "sql" ? "SQL REQUEST" : "HTTP REQUEST"}
@@ -628,6 +641,8 @@ export default function Boostman() {
                   )}
                   {section === "flows" && (
                     <FlowEditor
+                      flows={workspace.flows}
+                      disabled={running}
                       key={current.id}
                       flow={current as Flow}
                       requestFolders={workspace.requestFolders}
@@ -635,6 +650,11 @@ export default function Boostman() {
                       requests={workspace.requests}
                       connections={workspace.connections}
                       statuses={statuses}
+                      results={flowResults(
+                        runTarget === `${section}/${selected}`
+                          ? snapshot
+                          : null,
+                      )}
                     />
                   )}
                   {section === "connections" && (
@@ -726,6 +746,8 @@ export default function Boostman() {
               {runnable && (
                 <ResponsePanel
                   key={runId}
+                  collapsed={resultsCollapsed}
+                  onToggle={() => setResultsCollapsed((value) => !value)}
                   snapshot={
                     runTarget === `${section}/${selected}` ? snapshot : null
                   }
@@ -806,6 +828,39 @@ export default function Boostman() {
             </span>
           </footer>
         </main>
+        {transfer && (
+          <HttpTransferDialog
+            request={transfer === "export" ? (current as Request) : undefined}
+            onClose={() => setTransfer(null)}
+            onImport={async (config, secret) => {
+              if (running) throw Error("运行期间不能导入请求");
+              const request = {
+                ...newRequest(),
+                ...config,
+                name: `导入 · ${config.url}`,
+                folderId: activeFolderId,
+              } as Request;
+              if (secret !== undefined) {
+                if (!native)
+                  throw Error(
+                    "含认证信息的请求需要在桌面应用导入，以便安全保存凭据",
+                  );
+                const secretId = `http-${request.id}`;
+                await invoke("set_secret", { id: secretId, secret });
+                request.auth = { ...request.auth, secretId };
+              }
+              mutate({
+                ...workspace,
+                requests: [...workspace.requests, request],
+              });
+              setSection("requests");
+              setRequestKind("http");
+              setSelected(request.id);
+              setSearch("");
+              setHelp(false);
+            }}
+          />
+        )}
       </div>
     </ValidationContext.Provider>
   );

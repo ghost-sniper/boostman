@@ -1,4 +1,6 @@
 use crate::{fql, http, scripts, sql};
+#[path = "flow_graph.rs"]
+mod flow_graph;
 use serde_json::{Map, Value, json};
 use std::{
     collections::{HashMap, HashSet},
@@ -8,6 +10,7 @@ use std::{
     },
     time::Instant,
 };
+#[derive(Clone)]
 pub struct Context {
     pub locals: Value,
     pub environment: Value,
@@ -48,7 +51,7 @@ impl Context {
         Value::Object(v)
     }
     fn root(&self) -> Value {
-        json!({"variables":self.variables(),"nodes":self.nodes,"input":self.input,"item":self.item,"index":self.index,"iteration":self.iteration_index})
+        json!({"variables":self.variables(),"locals":self.locals,"nodes":self.nodes,"input":self.input,"item":self.item,"index":self.index,"iteration":self.iteration_index})
     }
 }
 pub fn interpolate(v: &Value, vars: &Value) -> Result<Value, String> {
@@ -116,6 +119,11 @@ struct Runner<'a> {
     base_collection: Value,
     path: Vec<usize>,
     steps: usize,
+    collectors: Vec<HashMap<String, Vec<Value>>>,
+    output: Option<Value>,
+    response: Option<Value>,
+    suppress_steps: bool,
+    flow_stack: Vec<String>,
 }
 impl Runner<'_> {
     fn inherited(&self, request_id: &str) -> Vec<Value> {
@@ -159,6 +167,9 @@ impl Runner<'_> {
         }
     }
     fn emit(&self, event: Value) {
+        if self.suppress_steps && event["type"] == "step" {
+            return;
+        }
         (self.emitter)(event)
     }
     fn script(
@@ -353,6 +364,39 @@ impl Runner<'_> {
         }
         Ok(())
     }
+    fn route(
+        &mut self,
+        flow: &Value,
+        id: &str,
+        data: &Value,
+        selected: &str,
+        depth: usize,
+    ) -> Result<Value, String> {
+        let branches = crate::flow_blocks::branches(data)?;
+        for branch in branches.iter().filter(|b| b.as_str() != selected) {
+            let mut scopes = HashSet::from([format!("{id}:{branch}")]);
+            let mut skipped = HashSet::new();
+            loop {
+                let mut changed = false;
+                for n in flow["nodes"].as_array().unwrap() {
+                    if scopes.contains(n["data"]["scope"].as_str().unwrap_or("root")) {
+                        let nid = n["id"].as_str().unwrap();
+                        if skipped.insert(nid.to_owned()) {
+                            self.emit(json!({"type":"step","nodeId":nid,"path":self.path,"status":"skipped"}));
+                            for b in crate::flow_blocks::branches(&n["data"])? {
+                                scopes.insert(format!("{nid}:{b}"));
+                            }
+                            changed = true;
+                        }
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+        }
+        self.flow_scope(flow, &format!("{id}:{selected}"), depth + 1)
+    }
     fn flow_scope(&mut self, flow: &Value, scope: &str, depth: usize) -> Result<Value, String> {
         if depth > 32 {
             return Err("流程嵌套超过 32 层".into());
@@ -391,6 +435,8 @@ impl Runner<'_> {
                 continue;
             }
             self.emit(json!({"type":"step","nodeId":id,"path":self.path,"status":"running"}));
+            let started = Instant::now();
+            let mut meta = json!({"label":d["label"].as_str().unwrap_or(id)});
             let outcome = (|| -> Result<Value, String> {
                 match kind {
                     "start" | "end" => Ok(self.ctx.input.clone()),
@@ -404,25 +450,103 @@ impl Runner<'_> {
                         }
                         Ok(val)
                     }
+                    "condition" => {
+                        let branch = crate::flow_blocks::condition(d, &self.ctx.root())?;
+                        meta["branch"] = json!(branch);
+                        self.route(flow, id, d, &branch, depth)
+                    }
+                    "validate" => {
+                        let report = crate::flow_blocks::validate(d, &self.ctx.input)?;
+                        let branch = if report["passed"] == true {
+                            "pass"
+                        } else {
+                            "fail"
+                        };
+                        meta["validation"] = report;
+                        meta["branch"] = json!(branch);
+                        self.route(flow, id, d, branch, depth)
+                    }
+                    kind if crate::flow_blocks::KINDS.contains(&kind) => {
+                        let value = crate::flow_blocks::evaluate(d, &self.ctx.root())?;
+                        match kind {
+                            "createVariable" => {
+                                let name = crate::flow_blocks::variable_name(d)?;
+                                self.ctx.locals[name] = value.clone();
+                                Ok(value)
+                            }
+                            "collect" => {
+                                if let Some(frame) = self.collectors.last_mut() {
+                                    let values = frame.entry(id.to_owned()).or_default();
+                                    if values.len() >= 10000 {
+                                        return Err("Collect 最多收集 10000 项".into());
+                                    }
+                                    values.push(value.clone());
+                                    meta["collecting"] = json!(true);
+                                    Ok(value)
+                                } else {
+                                    if !value.is_array() {
+                                        return Err("循环外的 Collect 需要数组输入，请连接 Repeat/ForEach 的输出".into());
+                                    }
+                                    Ok(value)
+                                }
+                            }
+                            "output" => {
+                                if self.output.is_some() {
+                                    return Err("同一次运行只能执行一个 Output".into());
+                                }
+                                self.output = Some(value.clone());
+                                meta["output"] = json!(true);
+                                Ok(value)
+                            }
+                            "response" => {
+                                if self.response.is_some() {
+                                    return Err("同一次运行只能执行一个 Response".into());
+                                }
+                                let response = crate::flow_blocks::response(d, value)?;
+                                meta["statusCode"] = response["statusCode"].clone();
+                                meta["headers"] = response["headers"].clone();
+                                self.response = Some(response.clone());
+                                meta["response"] = json!(true);
+                                Ok(response)
+                            }
+                            "delay" => {
+                                self.host.runtime.block_on(crate::flow_blocks::delay(
+                                    &value,
+                                    &self.host.cancel,
+                                ))?;
+                                Ok(self.ctx.input.clone())
+                            }
+                            "display" => {
+                                meta["display"] = crate::flow_blocks::display(d, value)?;
+                                Ok(self.ctx.input.clone())
+                            }
+                            "log" => {
+                                let level = d["level"].as_str().unwrap_or("log");
+                                if !["log", "info", "warn", "error", "debug"].contains(&level) {
+                                    return Err("Log 日志级别无效".into());
+                                }
+                                let message = value
+                                    .as_str()
+                                    .map(str::to_owned)
+                                    .unwrap_or_else(|| value.to_string());
+                                let entry = json!({"type":"console","logId":uuid::Uuid::new_v4().to_string(),"nodeId":id,"phase":"flow","path":self.path,"level":level,"message":message,"timestamp":chrono::Utc::now().to_rfc3339()});
+                                eprintln!("[{level}] [{id} {:?}] {message}", self.path);
+                                self.emit(entry.clone());
+                                if self.logs.len() >= 2000 {
+                                    self.logs.remove(0);
+                                }
+                                self.logs.push(entry);
+                                Ok(self.ctx.input.clone())
+                            }
+                            _ => Ok(value),
+                        }
+                    }
                     "if" => {
                         let cond = fql::boolean(&fql::query(
                             d["expression"].as_str().unwrap_or("false"),
                             &self.ctx.root(),
                         )?)?;
-                        let skipped = format!("{id}:{}", if cond { "else" } else { "then" });
-                        for n in flow["nodes"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter(|n| n["data"]["scope"] == skipped)
-                        {
-                            self.emit(json!({"type":"step","nodeId":n["id"],"path":self.path,"status":"skipped"}));
-                        }
-                        self.flow_scope(
-                            flow,
-                            &format!("{id}:{}", if cond { "then" } else { "else" }),
-                            depth + 1,
-                        )
+                        self.route(flow, id, d, if cond { "then" } else { "else" }, depth)
                     }
                     "repeat" | "while" | "foreach" => {
                         let limit = d["maxIterations"]
@@ -459,6 +583,36 @@ impl Runner<'_> {
                         let old_index = self.ctx.index;
                         let mut values = vec![];
                         let mut i = 0;
+                        let mut frame = HashMap::new();
+                        for n in flow["nodes"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .filter(|n| n["data"]["kind"] == "collect")
+                        {
+                            let mut s = n["data"]["scope"].as_str().unwrap_or("root");
+                            while s != "root" {
+                                let Some((owner, _)) = s.rsplit_once(':') else {
+                                    break;
+                                };
+                                let parent = flow["nodes"]
+                                    .as_array()
+                                    .unwrap()
+                                    .iter()
+                                    .find(|n| n["id"] == owner)
+                                    .unwrap();
+                                if ["repeat", "foreach", "while"]
+                                    .contains(&parent["data"]["kind"].as_str().unwrap_or(""))
+                                {
+                                    if owner == id {
+                                        frame.insert(n["id"].as_str().unwrap().to_owned(), vec![]);
+                                    }
+                                    break;
+                                }
+                                s = parent["data"]["scope"].as_str().unwrap_or("root");
+                            }
+                        }
+                        self.collectors.push(frame);
                         let result = (|| -> Result<(), String> {
                             loop {
                                 self.check()?;
@@ -487,20 +641,32 @@ impl Runner<'_> {
                         })();
                         self.ctx.item = old_item;
                         self.ctx.index = old_index;
+                        let collected = self.collectors.pop().unwrap();
                         result?;
+                        for (nid, values) in collected {
+                            let result = json!({"status":"succeeded","data":values,"meta":{"collected":true,"loopId":id}});
+                            self.emit(json!({"type":"step","nodeId":nid,"path":self.path,"status":"succeeded","result":result}));
+                            self.ctx.nodes[&nid] = result;
+                        }
                         Ok(json!(values))
                     }
                     _ => Err(format!("不支持的节点类型 {kind}")),
                 }
             })();
-            let status = if outcome.is_ok() {
+            let status = if self.host.cancel.load(Ordering::SeqCst) {
+                "cancelled"
+            } else if outcome.is_ok() {
                 "succeeded"
             } else {
                 "failed"
             };
             let result = match &outcome {
-                Ok(v) => json!({"status":status,"data":v}),
-                Err(e) => json!({"status":status,"error":e}),
+                Ok(v) => {
+                    json!({"status":status,"data":v,"meta":meta,"elapsedMs":started.elapsed().as_millis()})
+                }
+                Err(e) => {
+                    json!({"status":status,"error":e,"elapsedMs":started.elapsed().as_millis()})
+                }
             };
             self.emit(
                 json!({"type":"step","nodeId":id,"path":self.path,"status":status,"result":result}),
@@ -612,9 +778,25 @@ pub fn ordered_scope<'a>(flow: &'a Value, scope: &str) -> Result<Vec<&'a Value>,
     Ok(out)
 }
 pub fn validate_flow(flow: &Value) -> Result<(), String> {
+    if flow["executionMode"] == "dataflow" {
+        return flow_graph::validate(flow);
+    }
     let nodes = flow["nodes"].as_array().ok_or("缺少 nodes")?;
     let mut ids = HashSet::new();
+    if nodes
+        .iter()
+        .filter(|n| n["data"]["kind"] == "output")
+        .count()
+        > 1
+    {
+        return Err("每个流程最多一个 Output".into());
+    }
     for n in nodes {
+        crate::flow_blocks::branches(&n["data"])?;
+        if n["data"]["kind"] == "output" && n["data"]["scope"].as_str().unwrap_or("root") != "root"
+        {
+            return Err("Output 必须位于主流程".into());
+        }
         let id = n["id"].as_str().ok_or("节点缺少 ID")?;
         if !ids.insert(id) {
             return Err("节点 ID 重复".into());
@@ -642,9 +824,9 @@ pub fn validate_flow(flow: &Value) -> Result<(), String> {
                 .iter()
                 .find(|n| n["id"] == owner)
                 .ok_or("子流程控制器不存在")?;
-            let kind = parent["data"]["kind"].as_str().unwrap_or("");
-            if !(kind == "if" && ["then", "else"].contains(&branch)
-                || ["repeat", "while", "foreach"].contains(&kind) && branch == "body")
+            if !crate::flow_blocks::branches(&parent["data"])?
+                .iter()
+                .any(|b| b == branch)
             {
                 return Err("子流程与控制器类型不匹配".into());
             }
@@ -726,6 +908,11 @@ pub fn execute(
         collection_id,
         path: vec![],
         steps: 0,
+        collectors: vec![],
+        output: None,
+        response: None,
+        suppress_steps: false,
+        flow_stack: vec![],
     };
     let outcome = (|| -> Result<Value, String> {
         match kind.as_str() {
@@ -771,7 +958,11 @@ pub fn execute(
             }
             "flow" => {
                 validate_flow(&target)?;
-                runner.flow_scope(&target, "root", 0)
+                if target["executionMode"] == "dataflow" {
+                    runner.graph(&target)
+                } else {
+                    runner.flow_scope(&target, "root", 0)
+                }
             }
             _ => Err("未知运行类型".into()),
         }
@@ -782,8 +973,12 @@ pub fn execute(
         || runner
             .results
             .iter()
-            .any(|r| r["result"]["status"] != "succeeded");
-    json!({"status":if cancel.load(Ordering::SeqCst){"cancelled"}else if failed{"failed"}else{"succeeded"},"data":outcome.as_ref().ok(),"error":outcome.as_ref().err(),"persistenceError":persisted.err(),"steps":runner.results,"logs":runner.logs,"context":runner.ctx.root(),"elapsedMs":started.elapsed().as_millis()})
+            .any(|r| r["result"]["status"] != "succeeded" && r["handled"] != true);
+    let data = outcome
+        .as_ref()
+        .ok()
+        .map(|value| runner.output.as_ref().unwrap_or(value));
+    json!({"status":if cancel.load(Ordering::SeqCst){"cancelled"}else if failed{"failed"}else{"succeeded"},"data":data,"output":runner.output,"response":runner.response,"error":outcome.as_ref().err(),"persistenceError":persisted.err(),"steps":runner.results,"logs":runner.logs,"context":runner.ctx.root(),"elapsedMs":started.elapsed().as_millis()})
 }
 #[cfg(test)]
 mod tests {
@@ -893,6 +1088,285 @@ mod tests {
     }
     fn flow(nodes: Vec<Value>, links: Vec<(&str, &str)>) -> Value {
         json!({"nodes":nodes,"edges":links.into_iter().map(|(a,b)|json!({"source":a,"target":b})).collect::<Vec<_>>()})
+    }
+    #[test]
+    fn condition_or_and_collect_inside_loop() {
+        let mut seed = node("seed", "constant", "root", "");
+        seed["data"]["value"] = json!([0, 1, 2]);
+        let mut condition = node("choose", "condition", "loop:body", "");
+        condition["data"]["conditions"] =
+            json!([{"id":"a","expression":"input < 1"},{"id":"b","expression":"input < 2"}]);
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                seed,
+                node("loop", "foreach", "root", "input"),
+                node("output", "output", "root", "$lookup(nodes,'collect').data"),
+                node("e", "end", "root", ""),
+                condition,
+                node("merge", "or", "loop:body", ""),
+                node("collect", "collect", "loop:body", "input"),
+                node("a", "evaluate", "choose:case-a", "0"),
+                node("b", "evaluate", "choose:case-b", "10"),
+                node("fallback", "evaluate", "choose:default", "20"),
+            ],
+            vec![
+                ("s", "seed"),
+                ("seed", "loop"),
+                ("loop", "output"),
+                ("output", "e"),
+                ("choose", "merge"),
+                ("merge", "collect"),
+            ],
+        );
+        let r = run("flow", f, json!([]), json!({}));
+        assert_eq!(r["status"], "succeeded", "{r}");
+        assert_eq!(r["data"], json!([0, 10, 20]));
+        assert_eq!(r["output"], r["data"]);
+        assert_eq!(r["context"]["nodes"]["collect"]["meta"]["collected"], true);
+    }
+    #[test]
+    fn validate_routes_fail_without_failing_execution_and_or_preserves_null() {
+        for (input, expected, branch) in [
+            (json!({"id":1}), json!(false), "pass"),
+            (json!({"id":"bad"}), Value::Null, "fail"),
+        ] {
+            let mut seed = node("seed", "constant", "root", "");
+            seed["data"]["value"] = input;
+            let mut validate = node("validate", "validate", "root", "");
+            validate["data"]["schema"] =
+                json!({"type":"object","required":["id"],"properties":{"id":{"type":"integer"}}});
+            let mut yes = node("yes", "bool", "validate:pass", "");
+            yes["data"]["value"] = json!(false);
+            let f = flow(
+                vec![
+                    node("s", "start", "root", ""),
+                    seed,
+                    validate,
+                    node("merge", "or", "root", ""),
+                    node("output", "output", "root", "input"),
+                    node("e", "end", "root", ""),
+                    yes,
+                    node("no", "null", "validate:fail", ""),
+                ],
+                vec![
+                    ("s", "seed"),
+                    ("seed", "validate"),
+                    ("validate", "merge"),
+                    ("merge", "output"),
+                    ("output", "e"),
+                ],
+            );
+            let r = run("flow", f, json!([]), json!({}));
+            assert_eq!(r["status"], "succeeded", "{r}");
+            assert_eq!(r["data"], expected);
+            assert_eq!(r["context"]["nodes"]["validate"]["meta"]["branch"], branch);
+            let skipped = if branch == "pass" { "no" } else { "yes" };
+            assert!(r["context"]["nodes"].get(skipped).is_none());
+        }
+    }
+    #[test]
+    fn variables_repeat_response_and_output() {
+        let mut create = node("create", "createVariable", "root", "1");
+        create["data"]["variableName"] = json!("count");
+        let mut inc = node("inc", "createVariable", "loop:body", "variables.count + 1");
+        inc["data"]["variableName"] = json!("count");
+        let mut get = node("get", "getVariable", "root", "");
+        get["data"]["variableName"] = json!("count");
+        let mut response = node("response", "response", "root", "input");
+        response["data"]["statusCode"] = json!(201);
+        response["data"]["headers"] = json!({"X-Flow":"test"});
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                create,
+                node("loop", "repeat", "root", "3"),
+                get,
+                response,
+                node("output", "output", "root", "input.body"),
+                node("e", "end", "root", ""),
+                inc,
+            ],
+            vec![
+                ("s", "create"),
+                ("create", "loop"),
+                ("loop", "get"),
+                ("get", "response"),
+                ("response", "output"),
+                ("output", "e"),
+            ],
+        );
+        let r = run("flow", f, json!([]), json!({}));
+        assert_eq!(r["status"], "succeeded", "{r}");
+        assert_eq!(r["data"].as_f64(), Some(4.0));
+        assert_eq!(r["response"]["body"].as_f64(), Some(4.0));
+        assert_eq!(r["response"]["statusCode"], 201);
+        let mut get = node("get", "getVariable", "root", "");
+        get["data"]["variableName"] = json!("count");
+        let r = run(
+            "flow",
+            flow(
+                vec![
+                    node("s", "start", "root", ""),
+                    get,
+                    node("e", "end", "root", ""),
+                ],
+                vec![("s", "get"), ("get", "e")],
+            ),
+            json!([]),
+            json!({}),
+        );
+        assert_eq!(r["status"], "failed");
+    }
+    #[test]
+    fn nested_collectors_reset_each_invocation_and_zero_loop_is_empty() {
+        for count in [0, 2] {
+            let mut seed = node("seed", "constant", "outer:body", "");
+            seed["data"]["value"] = json!([1, 2]);
+            let f = flow(
+                vec![
+                    node("s", "start", "root", ""),
+                    node("outer", "repeat", "root", &count.to_string()),
+                    node(
+                        "output",
+                        "output",
+                        "root",
+                        "$lookup(nodes,'outerCollect').data",
+                    ),
+                    node("e", "end", "root", ""),
+                    seed,
+                    node("inner", "foreach", "outer:body", "input"),
+                    node("outerCollect", "collect", "outer:body", "input"),
+                    node("innerCollect", "collect", "inner:body", "item + index"),
+                ],
+                vec![
+                    ("s", "outer"),
+                    ("outer", "output"),
+                    ("output", "e"),
+                    ("seed", "inner"),
+                    ("inner", "outerCollect"),
+                ],
+            );
+            let r = run("flow", f, json!([]), json!({}));
+            assert_eq!(r["status"], "succeeded", "{r}");
+            assert_eq!(
+                r["data"],
+                if count == 0 {
+                    json!([])
+                } else {
+                    json!([[1.0, 3.0], [1.0, 3.0]])
+                }
+            );
+            if count > 0 {
+                assert_eq!(
+                    r["context"]["nodes"]["innerCollect"]["data"],
+                    json!([1.0, 3.0])
+                );
+            }
+        }
+    }
+    #[test]
+    fn invalid_condition_branches_and_duplicate_outputs_are_rejected() {
+        let mut condition = node("c", "condition", "root", "");
+        condition["data"]["conditions"] = json!([{"id":"a","expression":"true"}]);
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                condition,
+                node("e", "end", "root", ""),
+                node("bad", "null", "c:case-missing", ""),
+            ],
+            vec![("s", "c"), ("c", "e")],
+        );
+        assert!(validate_flow(&f).is_err());
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                node("a", "output", "root", "input"),
+                node("b", "output", "root", "input"),
+                node("e", "end", "root", ""),
+            ],
+            vec![("s", "a"), ("a", "b"), ("b", "e")],
+        );
+        assert!(validate_flow(&f).is_err());
+    }
+    #[test]
+    fn data_blocks_display_and_logging_keep_context() {
+        let mut constant = node("constant", "constant", "root", "");
+        constant["data"]["value"] = json!({"rows":[{"id":1,"value":10},{"id":2,"value":20}]});
+        let mut select = node("select", "select", "root", "");
+        select["data"]["path"] = json!("/rows");
+        let mut list = node("list", "list", "root", "");
+        list["data"]["entries"] =
+            json!([{"expression":"input[1].value"},{"expression":"input[0].value"}]);
+        let mut display = node("display", "display", "root", "input");
+        display["data"]["displayMode"] = json!("line");
+        let mut record = node("record", "record", "root", "");
+        record["data"]["entries"] = json!([{"key":"values","expression":"input"},{"key":"count","expression":"$count(input)"}]);
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                constant,
+                select,
+                list,
+                display,
+                node("log", "log", "root", "input"),
+                node("delay", "delay", "root", "0"),
+                record,
+                node("e", "end", "root", ""),
+            ],
+            vec![
+                ("s", "constant"),
+                ("constant", "select"),
+                ("select", "list"),
+                ("list", "display"),
+                ("display", "log"),
+                ("log", "delay"),
+                ("delay", "record"),
+                ("record", "e"),
+            ],
+        );
+        let r = run("flow", f, json!([]), json!({}));
+        assert_eq!(r["status"], "succeeded", "{r}");
+        assert_eq!(r["data"], json!({"values":[20,10],"count":2}));
+        assert_eq!(
+            r["context"]["nodes"]["display"]["meta"]["display"]["value"],
+            json!([20, 10])
+        );
+        assert_eq!(r["context"]["nodes"]["display"]["data"], json!([20, 10]));
+        assert_eq!(r["logs"][0]["phase"], "flow");
+        assert_eq!(r["logs"][0]["message"], "[20,10]");
+    }
+    #[test]
+    fn cancelling_delay_prevents_following_components() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        let f = flow(
+            vec![
+                node("s", "start", "root", ""),
+                node("d", "delay", "root", "10000"),
+                node("next", "log", "root", "'should not run'"),
+                node("e", "end", "root", ""),
+            ],
+            vec![("s", "d"), ("d", "next"), ("next", "e")],
+        );
+        let r = execute(
+            &|e| {
+                if e["nodeId"] == "d" && e["status"] == "running" {
+                    flag.store(true, Ordering::SeqCst);
+                }
+            },
+            None,
+            cancel,
+            json!({"requests":[],"environments":[],"connections":[],"collections":[]}),
+            "flow".into(),
+            f,
+            json!({}),
+        );
+        assert_eq!(r["status"], "cancelled");
+        assert_eq!(r["context"]["nodes"]["d"]["status"], "cancelled");
+        assert!(r["context"]["nodes"].get("next").is_none());
+        assert!(r["logs"].as_array().unwrap().is_empty());
     }
     #[test]
     fn nested_foreach_condition_and_while() {

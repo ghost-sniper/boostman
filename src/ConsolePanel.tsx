@@ -46,7 +46,9 @@ export function ConsolePanel({ snapshot }: { snapshot: Data }) {
                     ? "前置脚本"
                     : e.phase === "post"
                       ? "后置脚本"
-                      : ""}{" "}
+                      : e.phase === "flow"
+                        ? "Log 组件"
+                        : ""}{" "}
                   · 迭代 {JSON.stringify(e.path)}
                 </small>
                 <pre>{e.message}</pre>

@@ -23,13 +23,15 @@ export function JsonEditor({
 }) {
   const id = useId(),
     report = useContext(ValidationContext);
-  const [text, setText] = useState(JSON.stringify(value ?? {}, null, 2));
+  const [text, setText] = useState(
+    JSON.stringify(value === undefined ? {} : value, null, 2),
+  );
   const [error, setError] = useState("");
-  const serialized = JSON.stringify(value ?? {});
+  const serialized = JSON.stringify(value === undefined ? {} : value);
   const emitted = useRef(serialized);
   useEffect(() => {
     if (serialized !== emitted.current) {
-      setText(JSON.stringify(value ?? {}, null, 2));
+      setText(JSON.stringify(value === undefined ? {} : value, null, 2));
       setError("");
       report(id, "");
       emitted.current = serialized;
@@ -233,6 +235,17 @@ export function RequestEditor({
               value={r.method}
               onChange={(e) => set({ method: e.target.value })}
             >
+              {![
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "HEAD",
+                "OPTIONS",
+              ].includes(r.method) && (
+                <option value={r.method}>{r.method}</option>
+              )}
               {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map(
                 (m) => (
                   <option key={m}>{m}</option>

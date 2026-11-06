@@ -99,11 +99,11 @@ export const newRequest = (kind: "http" | "sql" = "http"): Request => ({
   postScript: "",
 });
 export const newFlow = (): Flow => {
-  const a = uid(),
-    b = uid();
+  const a = uid();
   return {
     id: uid(),
     name: "未命名流程",
+    executionMode: "dataflow",
     nodes: [
       {
         id: a,
@@ -111,14 +111,8 @@ export const newFlow = (): Flow => {
         position: { x: 80, y: 140 },
         data: { kind: "start", label: "开始", scope: "root" },
       },
-      {
-        id: b,
-        type: "boost",
-        position: { x: 400, y: 140 },
-        data: { kind: "end", label: "结束", scope: "root" },
-      },
     ],
-    edges: [{ id: uid(), source: a, target: b }],
+    edges: [],
   };
 };
 export const initialWorkspace = (): Workspace => ({
@@ -135,9 +129,32 @@ export const labels: Record<string, string> = {
   end: "结束",
   http: "HTTP 请求",
   sql: "SQL 请求",
-  evaluate: "FQL 转换",
+  flow: "Flow 模块",
+  evaluate: "Evaluate 求值",
   if: "条件分支",
-  repeat: "固定循环",
+  repeat: "Repeat 固定循环",
   while: "While 循环",
   foreach: "ForEach",
+  constant: "常量",
+  list: "List 数组",
+  record: "Record 对象",
+  select: "Select 取值",
+  delay: "Delay 延迟",
+  log: "Log 日志",
+  display: "Display 展示",
+  condition: "Condition 条件路由",
+  validate: "Validate 校验",
+  or: "OR 分支合流",
+  collect: "Collect 收集",
+  response: "Response 响应",
+  output: "Output 输出",
+  string: "String 字符串",
+  bool: "Bool 布尔值",
+  number: "Number 数值",
+  null: "Null 空值",
+  now: "Now 当前时间",
+  date: "Date 日期",
+  datetime: "Date & Time",
+  createVariable: "Create Variable",
+  getVariable: "Get Variable",
 };

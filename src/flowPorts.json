@@ -1,0 +1,112 @@
+{
+  "start": { "inputs": [], "outputs": [["out", "Start"]] },
+  "end": { "inputs": [["in", "Input"]], "outputs": [] },
+  "http": {
+    "inputs": [["in", "Send"]],
+    "outputs": [
+      ["success", "Success"],
+      ["fail", "Fail"],
+      ["tests", "Tests"]
+    ]
+  },
+  "sql": {
+    "inputs": [["in", "Send"]],
+    "outputs": [
+      ["success", "Success"],
+      ["fail", "Fail"]
+    ]
+  },
+  "flow": { "inputs": [["in", "Input"]], "outputs": [["out", "Output"]] },
+  "evaluate": { "inputs": [["in", "value"]], "outputs": [["out", "Result"]] },
+  "condition": {
+    "inputs": [["in", "value"]],
+    "outputs": [["default", "Default"]]
+  },
+  "validate": {
+    "inputs": [["in", "Data"]],
+    "outputs": [
+      ["pass", "Pass"],
+      ["fail", "Fail"]
+    ]
+  },
+  "if": {
+    "inputs": [["in", "value"]],
+    "outputs": [
+      ["true", "True"],
+      ["false", "False"]
+    ]
+  },
+  "or": {
+    "inputs": [
+      ["a", "Input 1"],
+      ["b", "Input 2"]
+    ],
+    "outputs": [["out", "Result"]]
+  },
+  "repeat": {
+    "inputs": [
+      ["count", "Count"],
+      ["start", "Start"]
+    ],
+    "outputs": [
+      ["repeat", "Repeat"],
+      ["index", "Index"],
+      ["done", "Finish"]
+    ]
+  },
+  "foreach": {
+    "inputs": [
+      ["list", "List"],
+      ["start", "Start"]
+    ],
+    "outputs": [
+      ["item", "Item"],
+      ["index", "Index"],
+      ["done", "Finish"]
+    ]
+  },
+  "while": {
+    "inputs": [["in", "Input"]],
+    "outputs": [
+      ["repeat", "Repeat"],
+      ["index", "Index"],
+      ["done", "Finish"]
+    ]
+  },
+  "collect": {
+    "inputs": [["in", "Item"]],
+    "outputs": [
+      ["list", "List"],
+      ["finish", "Finish"]
+    ]
+  },
+  "delay": { "inputs": [["in", "Data"]], "outputs": [["out", "Data"]] },
+  "log": { "inputs": [["in", "Data"]], "outputs": [["out", "Data"]] },
+  "display": { "inputs": [["in", "Data"]], "outputs": [["out", "Data"]] },
+  "select": { "inputs": [["in", "Data"]], "outputs": [["out", "Result"]] },
+  "constant": { "inputs": [], "outputs": [["out", "Value"]] },
+  "string": { "inputs": [], "outputs": [["out", "String"]] },
+  "bool": { "inputs": [], "outputs": [["out", "Bool"]] },
+  "number": { "inputs": [], "outputs": [["out", "Number"]] },
+  "null": { "inputs": [], "outputs": [["out", "Null"]] },
+  "now": { "inputs": [], "outputs": [["out", "Now"]] },
+  "date": { "inputs": [], "outputs": [["out", "Date"]] },
+  "datetime": { "inputs": [], "outputs": [["out", "Date & Time"]] },
+  "list": { "inputs": [], "outputs": [["out", "List"]] },
+  "record": { "inputs": [], "outputs": [["out", "Record"]] },
+  "createVariable": {
+    "inputs": [["in", "Value"]],
+    "outputs": [["out", "Value"]]
+  },
+  "getVariable": { "inputs": [], "outputs": [["out", "Value"]] },
+  "response": {
+    "inputs": [
+      ["body", "Body"],
+      ["statusCode", "Status Code"],
+      ["headers", "Headers"],
+      ["send", "Send"]
+    ],
+    "outputs": []
+  },
+  "output": { "inputs": [["in", "Output"]], "outputs": [] }
+}

@@ -52,6 +52,7 @@ if (platform === "windows") {
 }
 const checksums = [];
 for (const [format, extension] of Object.entries(config.formats)) {
+  const formatChecksums = [];
   const directory = join(bundle, format);
   const files = readdirSync(directory).filter((name) =>
     name.endsWith(extension),
@@ -96,10 +97,14 @@ for (const [format, extension] of Object.entries(config.formats)) {
       throw new Error("RPM architecture is not x86_64");
     const bytes = readFileSync(path);
     if (!bytes.length) throw new Error(`Empty installer: ${path}`);
-    checksums.push(
-      `${createHash("sha256").update(bytes).digest("hex")}  ${format}/${basename(path)}`,
-    );
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    checksums.push(`${hash}  ${format}/${basename(path)}`);
+    formatChecksums.push(`${hash}  ${basename(path)}`);
     console.log(`Verified ${path} (${bytes.length} bytes)`);
   }
+  writeFileSync(
+    join(directory, "SHA256SUMS.txt"),
+    `${formatChecksums.join("\n")}\n`,
+  );
 }
 writeFileSync(join(bundle, "SHA256SUMS.txt"), `${checksums.join("\n")}\n`);

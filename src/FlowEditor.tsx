@@ -4,54 +4,23 @@ import {
   Background,
   Controls,
   MiniMap,
-  Handle,
-  Position,
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
 } from "@xyflow/react";
-import type {
-  NodeProps,
-  Connection,
-  NodeChange,
-  EdgeChange,
-} from "@xyflow/react";
+import type { Connection, NodeChange, EdgeChange } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Field, RequestEditor } from "./components";
 import { labels, uid, newRequest } from "./model";
 import type { Data, Flow, Request } from "./model";
 import type { RequestFolder } from "./model";
 import { requestLabel } from "./requestFolders";
-function BoostNode({ data, selected }: NodeProps) {
-  const kind = String(data.kind);
-  return (
-    <div
-      className={`flow-node ${selected ? "selected" : ""} ${String(data.runStatus || "")} kind-${kind}`}
-    >
-      <Handle type="target" position={Position.Left} />
-      <span className="node-symbol">
-        {{
-          start: "▶",
-          end: "■",
-          http: "↗",
-          sql: "▤",
-          evaluate: "ƒ",
-          if: "⑂",
-          repeat: "↻",
-          while: "↻",
-          foreach: "⋯",
-        }[kind] || "◇"}
-      </span>
-      <div>
-        <small>{labels[kind]}</small>
-        <strong>{String(data.label || labels[kind])}</strong>
-      </div>
-      {!!data.runStatus && <i className="node-state" />}
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-const nodeTypes = { boost: BoostNode };
+import { FlowBlockConfig } from "./FlowBlockConfig";
+import { FlowDisplay } from "./FlowDisplay";
+import { blockGroups, branchOptions, branchNodeIds } from "./flowCatalog";
+import { FlowNode } from "./FlowNode";
+import { ports, canConnect, variableColor } from "./flowPorts";
+const nodeTypes = { boost: FlowNode };
 export function FlowEditor({
   flow,
   onChange,
@@ -59,6 +28,9 @@ export function FlowEditor({
   requestFolders = [],
   connections,
   statuses,
+  results = {},
+  disabled = false,
+  flows = [],
 }: {
   flow: Flow;
   onChange: (v: Flow) => void;
@@ -66,61 +38,133 @@ export function FlowEditor({
   requestFolders?: RequestFolder[];
   connections: Data[];
   statuses: Record<string, string>;
+  results?: Record<string, Data>;
+  disabled?: boolean;
+  flows?: Flow[];
 }) {
   const [scope, setScope] = useState("root"),
     [selection, setSelection] = useState("");
   const [instance, setInstance] = useState<any>(null);
+  const [group, setGroup] = useState("all");
+  const [picker, setPicker] = useState(false),
+    [blockSearch, setBlockSearch] = useState(""),
+    [settings, setSettings] = useState(false);
+  const graph = flow.executionMode === "dataflow";
   const node = flow.nodes.find((n) => n.id === selection),
     d = node?.data;
-  const setData = (patch: Data) =>
+  const editNode = (id: string, patch: Data) => {
+    if (disabled) return;
+    const previous = flow.nodes.find((n) => n.id === id)?.data;
+    const removed = new Set<string>();
+    if (patch.conditions)
+      for (const c of (previous?.conditions as Data[]) || [])
+        if (!patch.conditions.some((next: Data) => next.id === c.id))
+          removed.add(`${id}:case-${c.id}`);
+    const ids = branchNodeIds(flow.nodes, removed);
+    const changed = flow.nodes
+      .filter((n) => !ids.has(n.id))
+      .map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n))
+      .map((n) =>
+        previous?.kind === "createVariable" &&
+        patch.variableName !== undefined &&
+        n.data.variableRef === id
+          ? { ...n, data: { ...n.data, variableName: patch.variableName } }
+          : n,
+      );
     onChange({
       ...flow,
-      nodes: flow.nodes.map((n) =>
-        n.id === selection ? { ...n, data: { ...n.data, ...patch } } : n,
+      edges: flow.edges.filter(
+        (e) =>
+          !ids.has(e.source) &&
+          !ids.has(e.target) &&
+          (!graph ||
+            (ports(
+              changed.find((n) => n.id === e.source)!.data,
+              "outputs",
+            ).some((p) => p.id === e.sourceHandle) &&
+              ports(
+                changed.find((n) => n.id === e.target)!.data,
+                "inputs",
+              ).some((p) => p.id === e.targetHandle))),
       ),
+      nodes: changed,
     });
+  };
+  const setData = (patch: Data) => editNode(selection, patch);
   const visible: typeof flow.nodes = flow.nodes
-    .filter((n) => (n.data.scope || "root") === scope)
+    .filter((n) => graph || (n.data.scope || "root") === scope)
     .map((n) => ({
       ...n,
-      data: { ...n.data, runStatus: statuses[n.id] },
+      dragHandle: ".flow-block-header",
+      data: {
+        ...n.data,
+        runStatus: statuses[n.id],
+        preview: results[n.id]?.meta?.display,
+        portMode: graph,
+        requests,
+        flows: flows.filter(
+          (f) => f.id !== flow.id && f.executionMode === "dataflow",
+        ),
+        variableSources: flow.nodes
+          .filter((n) => n.data.kind === "createVariable")
+          .map((n) => ({
+            id: n.id,
+            name: n.data.variableName || n.data.label,
+          })),
+        runResult: results[n.id],
+        onEdit: (patch: Data) => editNode(n.id, patch),
+        onSettings: () => {
+          setSelection(n.id);
+          setSettings(true);
+        },
+        connectedInputs: Object.fromEntries(
+          flow.edges
+            .filter((e) => e.target === n.id)
+            .map((e) => [
+              e.targetHandle || "in",
+              flow.nodes.find((n) => n.id === e.source)?.data.label || e.source,
+            ]),
+        ),
+      },
       selected: n.id === selection,
       deletable: false,
     }));
   useEffect(() => {
     const frame = requestAnimationFrame(() =>
-      instance?.fitView({ padding: 0.18, duration: 180 }),
+      instance?.fitView({ padding: 0.18, duration: 180, maxZoom: 1 }),
     );
     return () => cancelAnimationFrame(frame);
   }, [scope, visible.length, instance]);
   const scopes = [
     { id: "root", name: "主流程" },
     ...flow.nodes.flatMap((n) =>
-      n.data.kind === "if"
-        ? [
-            { id: `${n.id}:then`, name: `${n.data.label} / 条件成立` },
-            { id: `${n.id}:else`, name: `${n.data.label} / 否则` },
-          ]
-        : ["repeat", "while", "foreach"].includes(String(n.data.kind))
-          ? [{ id: `${n.id}:body`, name: `${n.data.label} / 循环体` }]
-          : [],
+      branchOptions(n.data).map((b) => ({
+        id: `${n.id}:${b.id}`,
+        name: `${n.data.label} / ${b.name}`,
+      })),
     ),
   ];
   const add = (kind: string, position?: { x: number; y: number }) => {
+    if (disabled) return;
     const id = uid(),
       end = visible.find((n) => n.data.kind === "end");
-    const tail = visible.find(
-      (n) =>
-        n.data.kind !== "end" &&
-        !flow.edges.some(
-          (e) => e.source === n.id && (!end || e.target !== end.id),
-        ),
-    );
+    const tail = graph
+      ? visible[visible.length - 1]
+      : visible.find(
+          (n) =>
+            n.data.kind !== "end" &&
+            !flow.edges.some(
+              (e) => e.source === n.id && (!end || e.target !== end.id),
+            ),
+        );
     const next = {
       id,
       type: "boost",
       position: position || {
-        x: tail ? tail.position.x + 260 : 80,
+        x: tail
+          ? tail.position.x +
+            (graph ? 400 : tail.data.kind === "display" ? 410 : 260)
+          : 80,
         y: tail?.position.y || 140,
       },
       data: {
@@ -136,10 +180,43 @@ export function FlowEditor({
                 ? "false"
                 : "input",
         maxIterations: 1000,
+        entries: [],
+        value: null,
+        path: "",
+        displayMode: "json",
+        xKey: "x",
+        yKey: "y",
+        level: "log",
         requestId: "",
         request: newRequest(kind === "sql" ? "sql" : "http"),
       },
     };
+    if (kind === "delay") next.data.expression = "1000";
+    const now = new Date();
+    const defaults: Record<string, Data> = {
+      string: { value: "" },
+      bool: { value: false },
+      number: { value: 0 },
+      null: { value: null },
+      date: { value: now.toISOString().slice(0, 10) },
+      datetime: { value: now.toISOString() },
+      condition: {
+        conditions: [{ id: uid(), name: "条件 1", expression: "false" }],
+      },
+      validate: { schema: { type: "object" } },
+      response: { statusCode: 200, headers: {} },
+      createVariable: { variableName: "value" },
+      getVariable: { variableName: "value" },
+    };
+    Object.assign(next.data, defaults[kind] || {});
+    if (graph) {
+      if (kind === "foreach") next.data.expression = "input";
+      onChange({ ...flow, nodes: [...flow.nodes, next] });
+      setSelection(id);
+      setSettings(false);
+      setPicker(false);
+      return;
+    }
     let edges = flow.edges;
     if (tail && end)
       edges = edges.filter(
@@ -149,13 +226,20 @@ export function FlowEditor({
     if (end) edges = [...edges, { id: uid(), source: id, target: end.id }];
     const nodes = flow.nodes.map((n) =>
       n.id === end?.id
-        ? { ...n, position: { x: next.position.x + 260, y: next.position.y } }
+        ? {
+            ...n,
+            position: {
+              x: next.position.x + (kind === "display" ? 410 : 260),
+              y: next.position.y,
+            },
+          }
         : n,
     );
     onChange({ ...flow, nodes: [...nodes, next], edges });
     setSelection(id);
   };
   const remove = () => {
+    if (disabled) return;
     if (!node || ["start", "end"].includes(String(d?.kind))) return;
     const ids = new Set([node.id]);
     let changed = true;
@@ -174,7 +258,7 @@ export function FlowEditor({
     let edges = flow.edges.filter(
       (e) => !ids.has(e.source) && !ids.has(e.target),
     );
-    if (prev && next)
+    if (!graph && prev && next)
       edges = [
         ...edges,
         { id: uid(), source: prev.source, target: next.target },
@@ -187,49 +271,98 @@ export function FlowEditor({
     setSelection("");
   };
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
+    (changes: NodeChange[]) => {
+      if (disabled) return;
+      const edits = changes.filter(
+        (c) =>
+          c.type === "position" || c.type === "add" || c.type === "replace",
+      );
+      if (!edits.length) return;
       onChange({
         ...flow,
-        nodes: applyNodeChanges(
-          changes.filter((c) => c.type !== "remove"),
-          flow.nodes,
-        ),
-      }),
-    [flow, onChange],
+        nodes: applyNodeChanges(edits, flow.nodes),
+      });
+    },
+    [flow, onChange, disabled],
   );
   return (
-    <div className="flow-workspace">
+    <div
+      className={`flow-workspace ${graph ? "port-canvas" : "legacy-canvas"}`}
+    >
       <div className="flow-tools">
-        <div className="scope">
-          <span>子流程</span>
-          <select
-            value={scope}
-            onChange={(e) => {
-              setScope(e.target.value);
-              setSelection("");
-            }}
-          >
-            {scopes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="palette">
-          {["http", "sql", "evaluate", "if", "repeat", "while", "foreach"].map(
-            (k) => (
-              <button
-                key={k}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData("boost-node", k)}
-                onClick={() => add(k)}
+        {!graph && (
+          <div className="scope">
+            <span>子流程</span>
+            <select
+              value={scope}
+              onChange={(e) => {
+                setScope(e.target.value);
+                setSelection("");
+              }}
+            >
+              {scopes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <span className="flow-mode-label">
+          {graph ? "端口数据流" : "兼容模式 · 顺序链"}
+        </span>
+        <button
+          className="block-picker-toggle"
+          onClick={() => setPicker(!picker)}
+        >
+          ＋ Block
+        </button>
+        {picker && (
+          <div className="flow-block-picker">
+            <input
+              aria-label="搜索组件"
+              placeholder="搜索组件…"
+              value={blockSearch}
+              onChange={(e) => setBlockSearch(e.target.value)}
+            />
+            <div className="palette">
+              <select
+                aria-label="组件分类"
+                value={group}
+                onChange={(e) => setGroup(e.target.value)}
               >
-                ＋ {labels[k]}
-              </button>
-            ),
-          )}
-        </div>
+                <option value="all">全部组件</option>
+                {Object.entries(blockGroups).map(([key, g]) => (
+                  <option key={key} value={key}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              {(group === "all"
+                ? Object.values(blockGroups).flatMap((g) => g.kinds)
+                : blockGroups[group].kinds
+              )
+                .filter((k) => graph || k !== "flow")
+                .filter(
+                  (k) =>
+                    labels[k]
+                      .toLowerCase()
+                      .includes(blockSearch.toLowerCase()) ||
+                    k.toLowerCase().includes(blockSearch.toLowerCase()),
+                )
+                .map((k) => (
+                  <button
+                    key={k}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("boost-node", k)}
+                    onClick={() => add(k)}
+                  >
+                    ＋ {labels[k]}
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="flow-content">
         <div
@@ -249,31 +382,72 @@ export function FlowEditor({
           }}
         >
           <ReactFlow
+            // Capture the origin on press so the first move updates the position.
+            nodeDragThreshold={0}
+            nodesDraggable={!disabled}
+            nodesConnectable={!disabled}
             nodes={visible}
-            edges={flow.edges.filter(
-              (e) =>
-                visible.some((n) => n.id === e.source) &&
-                visible.some((n) => n.id === e.target),
-            )}
+            edges={[
+              ...flow.edges.filter(
+                (e) =>
+                  visible.some((n) => n.id === e.source) &&
+                  visible.some((n) => n.id === e.target),
+              ),
+              ...(graph
+                ? flow.nodes
+                    .filter(
+                      (n) =>
+                        n.data.kind === "getVariable" &&
+                        n.data.variableRef &&
+                        (selection === n.id ||
+                          selection === n.data.variableRef),
+                    )
+                    .map((n) => ({
+                      id: `reference-${n.id}`,
+                      source: String(n.data.variableRef),
+                      sourceHandle: "out",
+                      target: n.id,
+                      targetHandle: "variable-reference",
+                      deletable: false,
+                      selectable: false,
+                      style: {
+                        stroke: variableColor(
+                          String(n.data.variableName || ""),
+                        ),
+                        strokeDasharray: "4 4",
+                        strokeWidth: 1.2,
+                      },
+                    }))
+                : []),
+            ]}
             nodeTypes={nodeTypes}
             onInit={setInstance}
             onNodesChange={onNodesChange}
-            onEdgesChange={(changes: EdgeChange[]) =>
+            isValidConnection={(c) =>
+              !disabled && (!graph || canConnect(flow.nodes, flow.edges, c))
+            }
+            onEdgesChange={(changes: EdgeChange[]) => {
+              if (disabled) return;
               onChange({
                 ...flow,
                 edges: applyEdgeChanges(changes, flow.edges),
-              })
-            }
+              });
+            }}
             onConnect={(c: Connection) =>
-              onChange({ ...flow, edges: addEdge(c, flow.edges) })
+              !disabled && onChange({ ...flow, edges: addEdge(c, flow.edges) })
             }
             onNodeClick={(_, n) => setSelection(n.id)}
             onPaneClick={() => setSelection("")}
             fitView
+            fitViewOptions={{ maxZoom: 1, padding: 0.18 }}
+            defaultEdgeOptions={{
+              type: "default",
+              style: { stroke: "#a0a0a0", strokeWidth: 1.25 },
+            }}
             minZoom={0.2}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Background gap={22} color="#dce2e8" />
+            <Background gap={16} size={1} color="#e6e6e6" />
             <Controls />
             <MiniMap nodeColor="#d9e7e4" maskColor="#f7f9facc" />
           </ReactFlow>
@@ -281,11 +455,17 @@ export function FlowEditor({
             拖动节点排列 · 连线控制执行顺序 · 选中连线后按 Delete 删除
           </div>
         </div>
-        {node && d ? (
+        {node && d && (!graph || settings) ? (
           <aside className="node-config">
             <div className="panel-heading">
               <strong>{labels[String(d.kind)]}</strong>
-              <button className="icon" onClick={() => setSelection("")}>
+              <button
+                className="icon"
+                onClick={() => {
+                  setSettings(false);
+                  if (!graph) setSelection("");
+                }}
+              >
                 ×
               </button>
             </div>
@@ -295,6 +475,41 @@ export function FlowEditor({
               onChange={(label) => setData({ label })}
             />
             <p className="muted mono">ID: {node.id.slice(0, 8)}</p>
+            <Field
+              label="画布注释"
+              value={d.note}
+              onChange={(note) => setData({ note })}
+            />
+            {graph && (
+              <p className="muted">
+                通过卡片左侧输入端口、右侧输出端口连线。多个已连接输入全部到达后才执行；OR
+                使用先到达的数据。
+              </p>
+            )}
+            <FlowBlockConfig
+              key={node.id}
+              data={{ ...d, portMode: graph }}
+              onChange={setData}
+            />
+            {results[node.id]?.meta?.validation && (
+              <div className="validation-report">
+                <strong>
+                  {results[node.id].meta.validation.passed
+                    ? "Pass：校验通过"
+                    : "Fail：校验不通过"}
+                </strong>
+                {results[node.id].meta.validation.errors.map(
+                  (e: Data, i: number) => (
+                    <p key={i}>
+                      {e.path || "/"}：{e.message}
+                    </p>
+                  ),
+                )}
+              </div>
+            )}
+            {results[node.id]?.meta?.display && (
+              <FlowDisplay display={results[node.id].meta.display} />
+            )}
             {["if", "while", "repeat", "foreach", "evaluate"].includes(
               String(d.kind),
             ) && (
@@ -363,7 +578,7 @@ export function FlowEditor({
                 )}
               </>
             )}
-            {["if", "while", "repeat", "foreach"].includes(String(d.kind)) && (
+            {!graph && branchOptions(d).length > 0 && (
               <div className="branch-buttons">
                 {scopes
                   .filter((s) => s.id.startsWith(`${node.id}:`))
@@ -386,7 +601,7 @@ export function FlowEditor({
               </button>
             )}
           </aside>
-        ) : (
+        ) : !graph ? (
           <aside className="node-config empty-config">
             <span>◇</span>
             <h3>把请求串成流程</h3>
@@ -395,7 +610,7 @@ export function FlowEditor({
             </p>
             <p>首版按顺序执行，运行前由 Rust 检查连接与循环。</p>
           </aside>
-        )}
+        ) : null}
       </div>
     </div>
   );

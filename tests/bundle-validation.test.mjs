@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 const script = fileURLToPath(
   new URL("../scripts/verify-bundles.mjs", import.meta.url),
 );
@@ -46,6 +47,20 @@ test("checksums cover every required installer format", () =>
     );
     assert.match(checksums, /^[a-f0-9]{64}  msi\/test.msi/m);
     assert.match(checksums, /^[a-f0-9]{64}  nsis\/test.exe/m);
+    for (const [format, filename] of [
+      ["msi", "test.msi"],
+      ["nsis", "test.exe"],
+    ]) {
+      const directory = join(release, "bundle", format);
+      const expectedHash = createHash("sha256")
+        .update(readFileSync(join(directory, filename)))
+        .digest("hex");
+      assert.equal(
+        readFileSync(join(directory, "SHA256SUMS.txt"), "utf8"),
+        `${expectedHash}  ${filename}\n`,
+        "Each separately downloaded artifact must have a standalone checksum manifest",
+      );
+    }
   }));
 test("rejects ARM binaries, incomplete installers and unsupported target triples", () =>
   fixture((root, release, pe) => {
