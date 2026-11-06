@@ -8,6 +8,8 @@ mod oracle_adapter;
 mod scripts;
 mod sql;
 mod store;
+#[cfg(test)]
+mod tags_workflow_tests;
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,

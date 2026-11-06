@@ -294,6 +294,26 @@ fn field(v: &Value, k: &str) -> Value {
         _ => v.get(k).cloned().unwrap_or(Value::Null),
     }
 }
+fn equivalent(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Number(a), Value::Number(b)) => match (
+            a.to_string().parse::<sqlx::types::BigDecimal>(),
+            b.to_string().parse::<sqlx::types::BigDecimal>(),
+        ) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        },
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| equivalent(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(k, a)| b.get(k).is_some_and(|b| equivalent(a, b)))
+        }
+        _ => a == b,
+    }
+}
 fn eval(
     e: &Expr,
     root: &Value,
@@ -370,8 +390,8 @@ fn eval(
             } else {
                 let b = ev(b)?;
                 match op.as_str() {
-                    "=" | "==" => json!(a == b),
-                    "!=" => json!(a != b),
+                    "=" | "==" => json!(equivalent(&a, &b)),
+                    "!=" => json!(!equivalent(&a, &b)),
                     "&" => json!(format!("{}{}", text(&a), text(&b))),
                     "+" => json!(number(&a)? + number(&b)?),
                     "-" => json!(number(&a)? - number(&b)?),
@@ -518,6 +538,17 @@ pub fn query(source: &str, input: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn arithmetic_matches_integer_and_preserves_large_number_identity() {
+        assert_eq!(query("1 + 1 = 2", &Value::Null).unwrap(), json!(true));
+        assert_eq!(query("[1 + 1] = [2]", &Value::Null).unwrap(), json!(true));
+        assert_eq!(
+            query("9007199254740992 = 9007199254740993", &Value::Null).unwrap(),
+            json!(false)
+        );
+        assert_eq!(query("1 != 1.0", &Value::Null).unwrap(), json!(false));
+        assert_eq!(query("'2' = 2", &Value::Null).unwrap(), json!(false));
+    }
     #[test]
     fn transformations() {
         let v = json!({"items":[{"price":2},{"price":5}]});

@@ -1229,3 +1229,66 @@ details summary > span {
 .flow-node.skipped {
   opacity: 0.45;
 }
+.run-console {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.console-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 27px;
+  border-bottom: 1px solid #e6ebee;
+  font-size: 10px;
+  color: #82918e;
+}
+.console-toolbar select {
+  padding: 4px 7px;
+  font-size: 10px;
+  margin-left: auto;
+}
+.console-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.console-lines {
+  overflow: auto;
+  padding: 8px 27px;
+  flex: 1;
+}
+.console-line {
+  display: flex;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f3f4;
+}
+.console-level {
+  font: 10px monospace;
+  color: #448b79;
+  min-width: 38px;
+  padding-top: 3px;
+}
+.console-line small {
+  color: #9aa7ac;
+  font-size: 9px;
+}
+.console-line pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3b5954;
+  line-height: 1.7;
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+.console-warn .console-level,
+.console-warn pre {
+  color: #aa8133;
+}
+.console-error .console-level,
+.console-error pre {
+  color: #bc5946;
+}

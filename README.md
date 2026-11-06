@@ -82,6 +82,30 @@ input.rows[enabled = true]
 
 ## 兼容边界
 
+### 控制台与真实控制器验证
+
+HTTP 和 SQL 的前置/后置脚本支持 `console.log()`、`console.info()`、`console.warn()`、`console.error()` 和 `console.debug()`。运行结果的“控制台”标签实时展示整个运行的输出，可筛选级别并跟随输出；每条包含时间、节点、前置/后置阶段和嵌套循环索引。日志同时输出到桌面运行进程的标准错误流，失败前的内容也会保留。运行快照保留最近 2000 条控制台记录，结束后查看 End 节点也能看到之前请求和 SQL 的输出。
+
+```javascript
+// HTTP 后置脚本
+console.log("HTTP 标签", pm.response.json().tags);
+
+// SQL 后置脚本；json() 返回 { rows, columns, affectedRows }
+console.log("SQL 结果", pm.response.json().rows);
+```
+
+`postgres_tags_controllers_and_console` 集成测试使用真实 `http://localhost:9000/api/tags` 和 PostgreSQL 标签源表，验证固定循环 → While → ForEach → If/Else → 参数化 SQL → FQL 比对；全程只读取业务表。对于 3 个标签，正常场景固定循环 2 次、While 总计 4 次、ForEach 比对 12 次，条件两条分支分别执行 4 次和 8 次。还验证故意不匹配时断言失败且日志保留、零次循环、空 ForEach、While 超限及非布尔条件拒绝。
+
+先按下方数据库测试说明设置 `BOOSTMAN_TEST_POSTGRES`，再运行：
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml postgres_tags_controllers_and_console -- --ignored --nocapture
+```
+
+报告输出到 `artifacts/tags-controller-validation.json`（含流程配置、事件和所有场景结果），正常场景日志输出到 `artifacts/tags-controller-console.log`。二者仅用于本地验证，不提交数据库凭据或测试数据到仓库。CI 默认跳过此测试，避免连接本地业务服务。
+
+### FQL 与脚本
+
 FQL 是由 Rust 实现的常用子集，不是 JSONata 或 JavaScript 回退。支持字段/索引访问、过滤、数组/对象构造、fn 回调、比较、布尔、算术、三元条件，以及 `$map`、`$filter`、`$count`、`$sum`、`$exists`、`$keys`、`$lookup`、`$join`、`$split`、`$uppercase`、`$lowercase`、`$trim`、`$json`、`$jsonParse`。条件严格返回布尔值；不支持的语法、函数和参数类型明确报错。[Postman FQL 参考](https://learning.postman.com/flows/reference/flows-query-language/introduction-to-fql)。
 
 JavaScript 在 Rust 嵌入的 QuickJS 中运行。每个请求依次执行集合、外层到内层父文件夹、请求的前置脚本，发送后再按同样顺序执行后置脚本。每个阶段中的脚本顺序等待异步任务完成。
@@ -96,7 +120,7 @@ JavaScript 在 Rust 嵌入的 QuickJS 中运行。每个请求依次执行集合
 | `pm.test`                                  | 同步/异步断言与失败汇总                                                                               |
 | `pm.expect`                                | equal/eql/deep.equal/include/property/a/an/lengthOf/not/ok/true/false/null/undefined 及常用链式连接词 |
 | `pm.sendRequest`                           | URL 或基本请求对象，支持回调和 Promise；使用同一 Rust HTTP 执行器                                     |
-| `pm.info`、`console`                       | 迭代索引/请求 ID/名称；log/warn/error                                                                 |
+| `pm.info`、`console`                       | 迭代索引/请求 ID/名称；log/info/warn/error/debug                                                      |
 
 未实现外部包、Node.js API、执行跳转及完整 Postman Sandbox；`pm.sendRequest` 不支持 Postman SDK 的复杂 URL 对象、文件表单对象等全部输入形态。附加请求在脚本阶段顺序执行；首版没有并行调度。未知 `pm` API 明确报错。[Postman Sandbox 参考](https://learning.postman.com/latest-v-12/docs/tests-and-scripts/write-scripts/postman-sandbox-reference/overview)。
 

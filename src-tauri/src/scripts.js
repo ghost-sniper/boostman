@@ -67,10 +67,11 @@ function response(r) {
     responseTime: r.elapsedMs,
     headers: h,
     json: () => {
+      if (r.raw === undefined) return JSON.parse(JSON.stringify(r.data));
       if (r.meta.encoding !== "utf8") throw Error("响应不是文本");
       return JSON.parse(r.raw);
     },
-    text: () => r.raw,
+    text: () => r.raw ?? JSON.stringify(r.data),
     to: {
       have: {
         status(code) {
@@ -297,13 +298,44 @@ globalThis.pm = unsupported("pm", {
     return delivered;
   },
 });
-globalThis.console = {
-  log: (...args) =>
-    __logs.push(
-      args
-        .map((x) => (typeof x === "string" ? x : JSON.stringify(x)))
-        .join(" "),
-    ),
-  warn: (...args) => __logs.push(args.join(" ")),
-  error: (...args) => __logs.push(args.join(" ")),
-};
+function consoleValue(value) {
+  if (value === undefined) return "undefined";
+  if (value instanceof Error) return String(value);
+  const seen = new WeakSet();
+  try {
+    const encoded = JSON.stringify(value, (_, item) => {
+      if (typeof item === "bigint") return `${item}n`;
+      if (item && typeof item === "object") {
+        if (seen.has(item)) return "[Circular]";
+        seen.add(item);
+      }
+      return item;
+    });
+    return encoded === undefined ? String(value) : JSON.parse(encoded);
+  } catch {
+    return String(value);
+  }
+}
+function writeConsole(level, args) {
+  const values = args.map(consoleValue);
+  const entry = {
+    level,
+    args: values,
+    message: values
+      .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
+      .join(" "),
+    timestamp: new Date().toISOString(),
+  };
+  if (__logs.length >= 2000) __logs.shift();
+  __logs.push(entry);
+  __hostLog(JSON.stringify(entry));
+}
+globalThis.console = unsupported(
+  "console",
+  Object.fromEntries(
+    ["log", "info", "warn", "error", "debug"].map((level) => [
+      level,
+      (...args) => writeConsole(level, args),
+    ]),
+  ),
+);

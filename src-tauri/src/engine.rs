@@ -102,13 +102,14 @@ fn interpolate_http(value: &Value, vars: &Value) -> Result<Value, String> {
     }
 }
 struct Runner<'a> {
-    emitter: &'a dyn Fn(Value),
+    emitter: &'a (dyn Fn(Value) + Sync),
     pool: Option<sqlx::SqlitePool>,
     workspace: Value,
     host: scripts::Host,
     ctx: Context,
     options: Value,
     results: Vec<Value>,
+    logs: Vec<Value>,
     env_id: String,
     collection_id: String,
     base_env: Value,
@@ -165,20 +166,57 @@ impl Runner<'_> {
         sources: &[String],
         request: Value,
         response: Value,
+        node_id: &str,
+        phase: &str,
     ) -> Result<Value, String> {
         if sources.iter().all(|s| s.trim().is_empty()) {
             return Ok(json!({"request":request,"tests":[],"logs":[]}));
         }
         let seed = json!({"request":request,"response":response,"locals":self.ctx.locals,"environment":self.ctx.environment,"collection":self.ctx.collection,"iteration":self.ctx.iteration,"iterationIndex":self.ctx.iteration_index});
-        let result = scripts::run(
-            sources,
-            seed,
-            &self.host,
-            self.options["scriptTimeoutMs"]
-                .as_u64()
-                .unwrap_or(5000)
-                .clamp(1, 600_000),
-        )?;
+        let request_id = request["id"].as_str().unwrap_or(node_id).to_owned();
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<Value>(128);
+        let (result, logs) = std::thread::scope(|scope| {
+            let reader = scope.spawn(|| {
+                let mut lines = Vec::new();
+                for mut entry in receiver {
+                    entry["type"] = json!("console");
+                    entry["logId"] = json!(uuid::Uuid::new_v4().to_string());
+                    entry["nodeId"] = json!(node_id);
+                    entry["requestId"] = json!(request_id);
+                    entry["phase"] = json!(phase);
+                    entry["path"] = json!(self.path);
+                    eprintln!(
+                        "[{}] [{} {:?}] {}",
+                        entry["level"].as_str().unwrap_or("log"),
+                        node_id,
+                        self.path,
+                        entry["message"].as_str().unwrap_or("")
+                    );
+                    self.emit(entry.clone());
+                    if lines.len() >= 2000 {
+                        lines.remove(0);
+                    }
+                    lines.push(entry);
+                }
+                lines
+            });
+            let result = scripts::run_with_console(
+                sources,
+                seed,
+                &self.host,
+                self.options["scriptTimeoutMs"]
+                    .as_u64()
+                    .unwrap_or(5000)
+                    .clamp(1, 600_000),
+                sender,
+            );
+            (result, reader.join().unwrap_or_default())
+        });
+        self.logs.extend(logs);
+        if self.logs.len() > 2000 {
+            self.logs.drain(..self.logs.len() - 2000);
+        }
+        let result = result?;
         self.ctx.locals = result["locals"].clone();
         self.ctx.environment = result["environment"].clone();
         self.ctx.collection = result["collection"].clone();
@@ -212,7 +250,7 @@ impl Runner<'_> {
                 .chain(std::iter::once(&request))
                 .map(|v| v["postScript"].as_str().unwrap_or("").to_owned())
                 .collect();
-            let pre = self.script(&before, request.clone(), Value::Null)?;
+            let pre = self.script(&before, request.clone(), Value::Null, node_id, "pre")?;
             request = pre["request"].clone();
             let mut resolved = request.clone();
             if request["kind"] == "sql" {
@@ -247,7 +285,7 @@ impl Runner<'_> {
                     &self.host.cancel,
                 ))?
             };
-            let post = self.script(&after, resolved, response.clone())?;
+            let post = self.script(&after, resolved, response.clone(), node_id, "post")?;
             let tests: Vec<Value> = pre["tests"]
                 .as_array()
                 .into_iter()
@@ -637,7 +675,7 @@ pub fn validate_flow(flow: &Value) -> Result<(), String> {
     Ok(())
 }
 pub fn execute(
-    emitter: &dyn Fn(Value),
+    emitter: &(dyn Fn(Value) + Sync),
     pool: Option<sqlx::SqlitePool>,
     cancel: Arc<AtomicBool>,
     workspace: Value,
@@ -683,6 +721,7 @@ pub fn execute(
         ctx,
         options,
         results: vec![],
+        logs: vec![],
         env_id,
         collection_id,
         path: vec![],
@@ -744,11 +783,34 @@ pub fn execute(
             .results
             .iter()
             .any(|r| r["result"]["status"] != "succeeded");
-    json!({"status":if cancel.load(Ordering::SeqCst){"cancelled"}else if failed{"failed"}else{"succeeded"},"data":outcome.as_ref().ok(),"error":outcome.as_ref().err(),"persistenceError":persisted.err(),"steps":runner.results,"context":runner.ctx.root(),"elapsedMs":started.elapsed().as_millis()})
+    json!({"status":if cancel.load(Ordering::SeqCst){"cancelled"}else if failed{"failed"}else{"succeeded"},"data":outcome.as_ref().ok(),"error":outcome.as_ref().err(),"persistenceError":persisted.err(),"steps":runner.results,"logs":runner.logs,"context":runner.ctx.root(),"elapsedMs":started.elapsed().as_millis()})
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn failed_request_keeps_console_output_and_order() {
+        let captured = std::sync::Mutex::new(vec![]);
+        let result = execute(
+            &|event| captured.lock().unwrap().push(event),
+            None,
+            Arc::new(AtomicBool::new(false)),
+            json!({"requests":[],"connections":[],"collections":[],"environments":[]}),
+            "request".into(),
+            json!({"id":"broken","kind":"http","url":"http://127.0.0.1","preScript":"console.log('before failure',{id:1});throw Error('intentional failure')"}),
+            json!({}),
+        );
+        assert_eq!(result["status"], "failed");
+        assert_eq!(result["logs"][0]["message"], "before failure {\"id\":1}");
+        assert_eq!(result["logs"][0]["phase"], "pre");
+        let events = captured.lock().unwrap();
+        let console = events.iter().position(|e| e["type"] == "console").unwrap();
+        let failed = events
+            .iter()
+            .position(|e| e["type"] == "step" && e["status"] == "failed")
+            .unwrap();
+        assert!(console < failed);
+    }
     #[test]
     fn collection_continue_policy() {
         let requests = json!([{"id":"a","kind":"http","url":"ftp://localhost/a"},{"id":"b","kind":"http","url":"ftp://localhost/b"}]);

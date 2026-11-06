@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { Data } from "./model";
+import { ConsolePanel } from "./ConsolePanel";
+import { consoleEntries } from "./console";
 const stateLabels: Record<string, string> = {
   running: "运行中",
   succeeded: "成功",
@@ -54,7 +56,7 @@ export function ResponsePanel({ snapshot }: { snapshot: Data | null }) {
           ["raw", "原始内容"],
           ["headers", "Headers"],
           ["tests", `断言 · ${tests.length}`],
-          ["logs", "日志"],
+          ["logs", `控制台 · ${consoleEntries(snapshot).length}`],
           ["timeline", "执行记录"],
           ["summary", "运行汇总"],
         ].map(([id, title]) => (
@@ -95,6 +97,8 @@ export function ResponsePanel({ snapshot }: { snapshot: Data | null }) {
           ))}
           {events.length === 0 && <p className="muted">尚无已完成的步骤。</p>}
         </div>
+      ) : tab === "logs" ? (
+        <ConsolePanel snapshot={snapshot} />
       ) : tab === "tests" ? (
         <div className="test-list">
           {tests.length === 0 ? (
@@ -118,11 +122,9 @@ export function ResponsePanel({ snapshot }: { snapshot: Data | null }) {
             : JSON.stringify(
                 tab === "headers"
                   ? result?.meta?.headers || []
-                  : tab === "logs"
-                    ? result?.logs || []
-                    : tab === "summary"
-                      ? (final ?? { status: snapshot.status })
-                      : (result?.data ?? null),
+                  : tab === "summary"
+                    ? (final ?? { status: snapshot.status })
+                    : (result?.data ?? null),
                 null,
                 2,
               )}

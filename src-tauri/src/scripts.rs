@@ -12,7 +12,23 @@ pub struct Host {
     pub jar: Arc<reqwest::cookie::Jar>,
     pub cancel: Arc<AtomicBool>,
 }
+#[cfg(test)]
 pub fn run(sources: &[String], seed: Value, host: &Host, timeout_ms: u64) -> Result<Value, String> {
+    let (sender, receiver) = std::sync::mpsc::sync_channel(128);
+    std::thread::scope(|scope| {
+        let reader = scope.spawn(|| for _ in receiver {});
+        let result = run_with_console(sources, seed, host, timeout_ms, sender);
+        let _ = reader.join();
+        result
+    })
+}
+pub fn run_with_console(
+    sources: &[String],
+    seed: Value,
+    host: &Host,
+    timeout_ms: u64,
+    on_log: std::sync::mpsc::SyncSender<Value>,
+) -> Result<Value, String> {
     let rt = Runtime::new().map_err(|e| e.to_string())?;
     rt.set_memory_limit(32 * 1024 * 1024);
     rt.set_max_stack_size(512 * 1024);
@@ -26,6 +42,8 @@ pub fn run(sources: &[String], seed: Value, host: &Host, timeout_ms: u64) -> Res
     let jar = host.jar.clone();
     let cancel = host.cancel.clone();
     context.with(|ctx|->Result<(),String>{
+        let logger=Function::new(ctx.clone(),move|line:String| { if let Ok(entry)=serde_json::from_str::<Value>(&line){let _=on_log.send(entry);} }).map_err(|e|e.to_string())?;
+        ctx.globals().set("__hostLog",logger).map_err(|e|e.to_string())?;
         let host_fn=Function::new(ctx.clone(),move|source:String|->String{
             let result=(||{let mut request:Value=serde_json::from_str(&source).map_err(|e|e.to_string())?;
                 let remaining=timeout_ms.saturating_sub(start.elapsed().as_millis() as u64);
@@ -57,6 +75,60 @@ pub fn run(sources: &[String], seed: Value, host: &Host, timeout_ms: u64) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn console_values_and_sql_response() {
+        let mut input = seed();
+        input["response"] =
+            json!({"data":{"rows":[{"id":1}]},"meta":{"driver":"postgres"},"elapsedMs":1});
+        let result=run(&["const value={name:'Rust'};value.self=value;console.log('SQL',pm.response.json().rows,undefined,null);console.warn(value);console.error(new Error('bad'));console.info('info');console.debug('debug');".into()],input,&host(),5000).unwrap();
+        assert!(result["error"].is_null(), "{result}");
+        let logs = result["logs"].as_array().unwrap();
+        assert_eq!(logs.len(), 5);
+        assert_eq!(logs[0]["message"], "SQL [{\"id\":1}] undefined null");
+        assert_eq!(logs[1]["args"][0]["self"], "[Circular]");
+        assert_eq!(logs[2]["message"], "Error: bad");
+        assert_eq!(logs[4]["level"], "debug");
+    }
+    #[test]
+    fn console_arrives_before_pending_http_finishes() {
+        use std::io::{Read, Write};
+        let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = server.local_addr().unwrap();
+        let (release, wait) = std::sync::mpsc::channel();
+        let server_thread = std::thread::spawn(move || {
+            let (mut stream, _) = server.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut data = [0; 2048];
+            let _ = stream.read(&mut data);
+            let _ = wait.recv_timeout(Duration::from_secs(5));
+            let _ = stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
+        });
+        let (sender, receiver) = std::sync::mpsc::sync_channel(128);
+        let worker = std::thread::spawn(move || {
+            run_with_console(
+                &[format!(
+                    "console.log('before HTTP');await pm.sendRequest('http://{address}');console.log('after HTTP');"
+                )],
+                seed(),
+                &host(),
+                10000,
+                sender,
+            )
+        });
+        let first = receiver.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert_eq!(first["message"], "before HTTP");
+        release.send(()).unwrap();
+        let result = worker.join().unwrap().unwrap();
+        server_thread.join().unwrap();
+        assert!(result["error"].is_null(), "{result}");
+        assert_eq!(
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap()["message"],
+            "after HTTP"
+        );
+    }
     fn host() -> Host {
         Host {
             runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
