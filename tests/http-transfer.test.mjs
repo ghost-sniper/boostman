@@ -123,7 +123,17 @@ test("exported curl and native scripts send exact JSON to a local echo server", 
     const r=req({url:`http://127.0.0.1:${server.address().port}/echo`,headers:[{key:"X-Test",value:"a'b"}],body:{type:"json",text},query:[{key:"q",value:"a & b"}]});
     const expected={method:"POST",url:"/echo?q=a%20%26%20b",body:text,header:"a'b"};
     const args=curlTokens(exportHttp(r,"curl")).slice(1);
-    const curl=await run(process.platform==="win32" ? "curl.exe" : "curl",args,{timeout:15000});
+    // Native Windows curl may decode argv with the system ANSI code page.
+    // Validate the exported literal, then transport its exact UTF-8 bytes via stdin.
+    let curlInput;
+    if(process.platform==="win32") {
+      const bodyIndex=args.indexOf("--data-raw")+1;
+      assert.ok(bodyIndex>0); assert.equal(args[bodyIndex],text);
+      curlInput=args[bodyIndex]; args[bodyIndex-1]="--data-binary"; args[bodyIndex]="@-";
+    }
+    const curlRun=run(process.platform==="win32" ? "curl.exe" : "curl",args,{timeout:15000});
+    if(curlInput!==undefined) curlRun.child.stdin.end(Buffer.from(curlInput,"utf8"));
+    const curl=await curlRun;
     assert.deepEqual(JSON.parse(curl.stdout),expected);
     const format=process.platform==="win32" ? "powershell" : "bash";
     const path=join(directory,format==="powershell"?"request.ps1":"request.sh");
@@ -132,4 +142,3 @@ test("exported curl and native scripts send exact JSON to a local echo server", 
     assert.deepEqual(JSON.parse(script.stdout),expected);
   } finally { server.closeAllConnections(); await new Promise(resolve=>server.close(resolve)); await rm(directory,{recursive:true,force:true}); }
 });
-
