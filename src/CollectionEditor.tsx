@@ -2,15 +2,19 @@ import { useState } from "react";
 import { Field, JsonEditor } from "./components";
 import { uid } from "./model";
 import type { Collection, Data, Request } from "./model";
+import type { RequestFolder } from "./model";
+import { requestLabel } from "./requestFolders";
 function Items({
   items,
   onChange,
   requests,
+  requestFolders,
   depth = 0,
 }: {
   items: Data[];
   onChange: (v: Data[]) => void;
   requests: Request[];
+  requestFolders: RequestFolder[];
   depth?: number;
 }) {
   const [pick, setPick] = useState(requests[0]?.id || "");
@@ -86,6 +90,7 @@ function Items({
                 depth={depth + 1}
                 items={item.items || []}
                 requests={requests}
+                requestFolders={requestFolders}
                 onChange={(children) => update(i, { ...item, items: children })}
               />
             </details>
@@ -97,7 +102,8 @@ function Items({
           <option value="">选择请求</option>
           {requests.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.kind === "sql" ? "SQL" : r.method} · {r.name}
+              {r.kind === "sql" ? "SQL" : r.method} ·{" "}
+              {requestLabel(r, requestFolders)}
             </option>
           ))}
         </select>
@@ -138,12 +144,14 @@ export function CollectionEditor({
   collection: c,
   onChange,
   requests,
+  requestFolders = [],
   options,
   onOptions,
 }: {
   collection: Collection;
   onChange: (v: Collection) => void;
   requests: Request[];
+  requestFolders?: RequestFolder[];
   options: Data;
   onOptions: (v: Data) => void;
 }) {
@@ -206,6 +214,7 @@ export function CollectionEditor({
       <Items
         items={c.items}
         requests={requests}
+        requestFolders={requestFolders}
         onChange={(items) => onChange({ ...c, items })}
       />
     </div>

@@ -20,6 +20,8 @@ import "@xyflow/react/dist/style.css";
 import { Field, RequestEditor } from "./components";
 import { labels, uid, newRequest } from "./model";
 import type { Data, Flow, Request } from "./model";
+import type { RequestFolder } from "./model";
+import { requestLabel } from "./requestFolders";
 function BoostNode({ data, selected }: NodeProps) {
   const kind = String(data.kind);
   return (
@@ -54,12 +56,14 @@ export function FlowEditor({
   flow,
   onChange,
   requests,
+  requestFolders = [],
   connections,
   statuses,
 }: {
   flow: Flow;
   onChange: (v: Flow) => void;
   requests: Request[];
+  requestFolders?: RequestFolder[];
   connections: Data[];
   statuses: Record<string, string>;
 }) {
@@ -344,7 +348,7 @@ export function FlowEditor({
                       .filter((r) => r.kind === d.kind)
                       .map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name}
+                          {requestLabel(r, requestFolders)}
                         </option>
                       ))}
                   </select>

@@ -26,20 +26,24 @@ pub async fn load(pool: &sqlx::SqlitePool) -> Result<Value, String> {
             let mut value: Value =
                 serde_json::from_str(row.get::<&str, _>(0)).map_err(|e| e.to_string())?;
             normalize_connections(&mut value)?;
+            crate::request_folders::normalize(&mut value)?;
+            crate::request_folders::validate(&value)?;
             Ok(value)
         }
         None => Ok(
-            json!({"version":1,"requests":[],"collections":[],"environments":[],"connections":[],"flows":[]}),
+            json!({"version":1,"requests":[],"requestFolders":[],"collections":[],"environments":[],"connections":[],"flows":[]}),
         ),
     }
 }
 pub async fn save(pool: &sqlx::SqlitePool, value: &Value) -> Result<(), String> {
     let mut value = value.clone();
+    crate::request_folders::normalize(&mut value)?;
     if value["version"] != 1 {
         return Err("不支持的工作区版本".into());
     }
     for key in [
         "requests",
+        "requestFolders",
         "collections",
         "environments",
         "connections",
@@ -53,6 +57,7 @@ pub async fn save(pool: &sqlx::SqlitePool, value: &Value) -> Result<(), String> 
     normalize_connections(&mut value)?;
     for key in [
         "requests",
+        "requestFolders",
         "collections",
         "environments",
         "connections",
@@ -85,6 +90,7 @@ pub async fn save(pool: &sqlx::SqlitePool, value: &Value) -> Result<(), String> 
             }
         }
     }
+    crate::request_folders::validate(&value)?;
     sqlx::query("INSERT INTO workspace(id,document) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET document=excluded.document").bind(value.to_string()).execute(pool).await.map_err(|e|e.to_string())?;
     Ok(())
 }
@@ -101,6 +107,32 @@ fn normalize_connections(workspace: &mut Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn request_folder_migration_and_invalid_save_preserve_references() {
+        let pool = open(Path::new(":memory:")).await.unwrap();
+        let old = json!({"version":1,"requests":[{"id":"http","name":"Tags","kind":"http","url":"http://localhost:9000/api/tags"},{"id":"sql","name":"Tags SQL","kind":"sql","sql":"SELECT 1"}],"collections":[{"id":"c","name":"Collection","variables":{},"items":[{"requestId":"http"}]}],"flows":[{"id":"f","name":"Flow","nodes":[{"data":{"requestId":"http"}}]}],"connections":[],"environments":[]});
+        sqlx::query("INSERT INTO workspace(id,document) VALUES(1,?)")
+            .bind(old.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let mut loaded = load(&pool).await.unwrap();
+        assert_eq!(loaded["requestFolders"], json!([]));
+        assert_eq!(loaded["requests"], old["requests"]);
+        loaded["requestFolders"] = json!([{"id":"http-folder","name":"标签组件","kind":"http","parentId":null},{"id":"sql-folder","name":"标签组件","kind":"sql","parentId":null}]);
+        loaded["requests"][0]["folderId"] = json!("http-folder");
+        loaded["requests"][1]["folderId"] = json!("sql-folder");
+        save(&pool, &loaded).await.unwrap();
+        let saved = load(&pool).await.unwrap();
+        assert_eq!(saved, loaded);
+        assert_eq!(saved["collections"], old["collections"]);
+        assert_eq!(saved["flows"], old["flows"]);
+        let mut invalid = saved.clone();
+        invalid["requests"][0]["folderId"] = json!("sql-folder");
+        assert!(save(&pool, &invalid).await.is_err());
+        assert_eq!(load(&pool).await.unwrap(), saved);
+        pool.close().await;
+    }
     #[tokio::test]
     async fn legacy_connections_are_read_without_losing_references() {
         let pool = open(Path::new(":memory:")).await.unwrap();
@@ -129,6 +161,10 @@ mod tests {
         let path = std::env::temp_dir().join(format!("boostman-{}.sqlite", uuid::Uuid::new_v4()));
         let pool = open(&path).await.unwrap();
         let mut w = load(&pool).await.unwrap();
+        w["requestFolders"] =
+            json!([{"id":"saved-folder","name":"保存后的组件目录","kind":"http","parentId":null}]);
+        w["requests"] =
+            json!([{"id":"saved-request","name":"请求","kind":"http","folderId":"saved-folder"}]);
         w["environments"] = json!([{"id":"env","name":"test","variables":{"token":"abc"}}]);
         w["connections"] = json!([{"id":"oracle-test","name":"Oracle","driver":"oracle","host":"localhost","port":1521,"database":"FREEPDB1","oracleMode":"service","secretId":"password-reference"}]);
         save(&pool, &w).await.unwrap();

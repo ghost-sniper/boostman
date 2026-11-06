@@ -49,6 +49,13 @@ export interface Request extends Data {
   id: string;
   name: string;
   kind: "http" | "sql";
+  folderId?: string | null;
+}
+export interface RequestFolder {
+  id: string;
+  name: string;
+  kind: Request["kind"];
+  parentId: string | null;
 }
 export interface Collection extends Data {
   id: string;
@@ -65,6 +72,7 @@ export interface Flow extends Data {
 export interface Workspace {
   version: number;
   requests: Request[];
+  requestFolders: RequestFolder[];
   collections: Collection[];
   environments: Data[];
   connections: DatabaseConnection[];
@@ -75,6 +83,7 @@ export const newRequest = (kind: "http" | "sql" = "http"): Request => ({
   id: uid(),
   name: kind === "http" ? "未命名请求" : "SQL 查询",
   kind,
+  folderId: null,
   method: "GET",
   url: "https://httpbin.org/get",
   query: [],
@@ -115,6 +124,7 @@ export const newFlow = (): Flow => {
 export const initialWorkspace = (): Workspace => ({
   version: 1,
   requests: [],
+  requestFolders: [],
   collections: [],
   connections: [],
   environments: [],

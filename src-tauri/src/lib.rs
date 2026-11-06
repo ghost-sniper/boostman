@@ -5,6 +5,7 @@ mod engine;
 mod fql;
 mod http;
 mod oracle_adapter;
+mod request_folders;
 mod scripts;
 mod sql;
 mod store;

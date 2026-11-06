@@ -377,6 +377,9 @@ small {
   gap: 13px;
   align-items: center;
 }
+.document-actions > .danger {
+  padding: 10px 16px;
+}
 .primary {
   background: #18846e;
   color: #fff;
@@ -1291,4 +1294,120 @@ details summary > span {
 .console-error .console-level,
 .console-error pre {
   color: #bc5946;
+}
+.request-kind-tabs {
+  display: flex;
+  margin: 0 15px 10px;
+  border-bottom: 1px solid #e3eae7;
+  gap: 8px;
+}
+.request-kind-tabs button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 9px 5px;
+  font-size: 11px;
+  color: #8c989e;
+}
+.request-kind-tabs button.active {
+  color: #177d66;
+  border-bottom: 2px solid #258c75;
+}
+.request-kind-tabs small {
+  font-size: 9px;
+  margin-left: 5px;
+  color: #9aa9a5;
+}
+.request-tree-tools {
+  display: flex;
+  gap: 5px;
+  padding: 0 15px 12px;
+}
+.request-tree-tools button {
+  font-size: 10px;
+  padding: 7px 8px;
+  white-space: nowrap;
+}
+.request-tree-tools button:first-child {
+  flex: 1;
+}
+.request-root {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 11px;
+  padding: 10px;
+  color: #80978f;
+  margin-bottom: 5px;
+}
+.request-root.selected,
+.request-folder-row.selected {
+  background: #eaf3ef;
+  border-radius: 5px;
+  color: #1b7866;
+}
+.request-folder-row {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  margin: 3px 0;
+  min-width: 0;
+}
+.folder-toggle {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: #97a7a0;
+  padding: 4px;
+  width: 20px;
+  flex-shrink: 0;
+}
+.folder-name {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.request-tree .sidebar-item {
+  font-size: 11px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.request-location {
+  padding: 8px 29px;
+  border-bottom: 1px solid #e8eeeb;
+  background: #fcfdfd;
+}
+.request-location label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  color: #8a9a92;
+}
+.request-location select {
+  font-size: 10px;
+  padding: 5px 8px;
+  max-width: 450px;
+}
+.folder-editor {
+  flex: 1;
+  overflow: auto;
+  padding-top: 40px;
+}
+.folder-delete {
+  margin-top: 35px;
+  padding-top: 20px;
+  border-top: 1px solid #e5eae7;
+}
+.folder-delete button {
+  font-size: 11px;
 }

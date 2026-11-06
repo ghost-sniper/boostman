@@ -10,6 +10,15 @@ import {
 import { CollectionEditor } from "./CollectionEditor";
 import { FlowEditor } from "./FlowEditor";
 import { ConnectionEditor } from "./ConnectionEditor";
+import { RequestSidebar } from "./RequestSidebar";
+import { RequestFolderEditor } from "./RequestFolderEditor";
+import {
+  folderChoices,
+  folderPath,
+  moveRequest,
+  moveFolder,
+  removeFolder,
+} from "./requestFolders";
 import { ResponsePanel } from "./ResponsePanel";
 import {
   initialWorkspace,
@@ -37,6 +46,8 @@ const names: Record<Section, string> = {
   environments: "环境与凭据",
 };
 export default function Boostman() {
+  const [requestKind, setRequestKind] = useState<Request["kind"]>("http");
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [runTarget, setRunTarget] = useState("");
   const [workspace, setWorkspace] = useState<Workspace>(initialWorkspace),
     [section, setSection] = useState<Section>("requests"),
@@ -76,6 +87,8 @@ export default function Boostman() {
       .then((w) => {
         setWorkspace(w);
         setSelected(w.requests[0]?.id || "");
+        setRequestKind(w.requests[0]?.kind || "http");
+        setActiveFolderId(w.requests[0]?.folderId || null);
         setLoaded(true);
       })
       .catch((e) => {
@@ -139,7 +152,12 @@ export default function Boostman() {
     });
   const choose = (s: Section) => {
     setSection(s);
-    setSelected(workspace[s][0]?.id || "");
+    const first =
+      s === "requests"
+        ? workspace.requests.find((r) => r.kind === requestKind)
+        : workspace[s][0];
+    setSelected(first?.id || "");
+    if (s === "requests") setActiveFolderId(first?.folderId || null);
     setSearch("");
     setHelp(false);
   };
@@ -147,7 +165,12 @@ export default function Boostman() {
     let value: Data;
     switch (section) {
       case "requests":
-        value = newRequest(kind);
+        value = {
+          ...newRequest(kind || requestKind),
+          folderId: !kind || kind === requestKind ? activeFolderId : null,
+        };
+        setRequestKind(kind || requestKind);
+        setActiveFolderId(value.folderId);
         break;
       case "collections":
         value = {
@@ -170,6 +193,44 @@ export default function Boostman() {
     }
     mutate({ ...workspace, [section]: [...items, value] });
     setSelected(value.id);
+  };
+  const activeFolder = workspace.requestFolders.find(
+    (f) => f.id === activeFolderId && f.kind === requestKind,
+  );
+  const organize = (change: () => Workspace) => {
+    try {
+      mutate(change());
+      setError("");
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  const switchKind = (kind: Request["kind"]) => {
+    setRequestKind(kind);
+    const first = workspace.requests.find((r) => r.kind === kind);
+    setSelected(first?.id || "");
+    setActiveFolderId(first?.folderId || null);
+    setSearch("");
+    setHelp(false);
+  };
+  const addFolder = () => {
+    const id = uid();
+    const next = {
+      ...workspace,
+      requestFolders: [
+        ...workspace.requestFolders,
+        { id, name: "新目录", kind: requestKind, parentId: null },
+      ],
+    };
+    try {
+      mutate(moveFolder(next, id, activeFolderId));
+      setSelected("");
+      setActiveFolderId(id);
+      setSearch("");
+      setError("");
+    } catch (e) {
+      setError(String(e));
+    }
   };
   const save = async () => {
     if (Object.keys(errors.current).length)
@@ -218,7 +279,13 @@ export default function Boostman() {
   const remove = () => {
     if (!current) return;
     mutate({ ...workspace, [section]: items.filter((i) => i.id !== selected) });
-    setSelected(items.find((i) => i.id !== selected)?.id || "");
+    setSelected(
+      items.find(
+        (i) =>
+          i.id !== selected &&
+          (section !== "requests" || i.kind === requestKind),
+      )?.id || "",
+    );
   };
   const runnable = ["requests", "collections", "flows"].includes(section);
   return (
@@ -267,15 +334,6 @@ export default function Boostman() {
           </div>
           <div className="sidebar-title">
             <h2>{names[section]}</h2>
-            {section === "requests" && (
-              <button
-                className="subtle"
-                disabled={running}
-                onClick={() => add("sql")}
-              >
-                ＋ SQL
-              </button>
-            )}
             <button
               className="icon"
               disabled={running}
@@ -293,41 +351,61 @@ export default function Boostman() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="sidebar-items">
-            {items
-              .filter((i) =>
-                i.name.toLowerCase().includes(search.toLowerCase()),
-              )
-              .map((i) => (
-                <button
-                  className={`sidebar-item ${selected === i.id ? "selected" : ""}`}
-                  key={i.id}
-                  onClick={() => setSelected(i.id)}
-                >
-                  <span
-                    className={`method ${i.kind === "sql" ? "sql" : (i.method || "").toLowerCase()}`}
+          {section === "requests" ? (
+            <RequestSidebar
+              requests={workspace.requests}
+              folders={workspace.requestFolders}
+              kind={requestKind}
+              onKind={switchKind}
+              selected={selected}
+              folderId={activeFolderId}
+              query={search}
+              disabled={running || !loaded}
+              onAddRequest={() => add()}
+              onAddFolder={addFolder}
+              onRequest={(r) => {
+                setSelected(r.id);
+                setActiveFolderId(r.folderId || null);
+              }}
+              onFolder={(id) => {
+                setActiveFolderId(id);
+                setSelected("");
+                setHelp(false);
+              }}
+            />
+          ) : (
+            <div className="sidebar-items">
+              {items
+                .filter((i) =>
+                  i.name.toLowerCase().includes(search.toLowerCase()),
+                )
+                .map((i) => (
+                  <button
+                    className={`sidebar-item ${selected === i.id ? "selected" : ""}`}
+                    key={i.id}
+                    onClick={() => setSelected(i.id)}
                   >
-                    {section === "requests"
-                      ? i.kind === "sql"
-                        ? "SQL"
-                        : i.method
-                      : section === "flows"
+                    <span
+                      className={`method ${i.kind === "sql" ? "sql" : (i.method || "").toLowerCase()}`}
+                    >
+                      {section === "flows"
                         ? "⑂"
                         : section === "connections"
                           ? "DB"
                           : "▱"}
-                  </span>
-                  <span>{i.name}</span>
-                </button>
-              ))}
-            {items.length === 0 && (
-              <div className="sidebar-empty">
-                还没有{names[section]}
-                <br />
-                点击 ＋ 创建第一个
-              </div>
-            )}
-          </div>
+                    </span>
+                    <span>{i.name}</span>
+                  </button>
+                ))}
+              {items.length === 0 && (
+                <div className="sidebar-empty">
+                  还没有{names[section]}
+                  <br />
+                  点击 ＋ 创建第一个
+                </div>
+              )}
+            </div>
+          )}
           <div className="sidebar-bottom">
             <span className="local-dot" /> 本地执行 · Rust 核心
           </div>
@@ -412,6 +490,31 @@ export default function Boostman() {
           )}
           {help ? (
             <Guide onClose={() => setHelp(false)} />
+          ) : section === "requests" && !current && activeFolder ? (
+            <RequestFolderEditor
+              folder={activeFolder}
+              folders={workspace.requestFolders}
+              requests={workspace.requests}
+              disabled={running}
+              onRename={(name) =>
+                mutate({
+                  ...workspace,
+                  requestFolders: workspace.requestFolders.map((f) =>
+                    f.id === activeFolder.id ? { ...f, name } : f,
+                  ),
+                })
+              }
+              onMove={(id) =>
+                organize(() => moveFolder(workspace, activeFolder.id, id))
+              }
+              onDelete={() => {
+                organize(() => removeFolder(workspace, activeFolder.id));
+                setActiveFolderId(activeFolder.parentId);
+                setSelected("");
+              }}
+              onAddRequest={() => add()}
+              onAddFolder={addFolder}
+            />
           ) : current ? (
             <>
               <div className="document-heading">
@@ -440,12 +543,12 @@ export default function Boostman() {
                     </span>
                   )}
                   <button
-                    className="icon danger"
+                    className="danger"
                     title="删除当前项"
                     disabled={running}
                     onClick={remove}
                   >
-                    ⌫
+                    删除当前项
                   </button>
                   {runnable &&
                     (running ? (
@@ -470,6 +573,35 @@ export default function Boostman() {
                     ))}
                 </div>
               </div>
+              {section === "requests" && (
+                <div className="request-location">
+                  <label>
+                    所属目录{" "}
+                    <select
+                      aria-label="请求所属目录"
+                      disabled={running}
+                      value={current.folderId || ""}
+                      onChange={(e) => {
+                        const folderId = e.target.value || null;
+                        organize(() =>
+                          moveRequest(workspace, current.id, folderId),
+                        );
+                        setActiveFolderId(folderId);
+                      }}
+                    >
+                      <option value="">根目录</option>
+                      {folderChoices(
+                        workspace.requestFolders,
+                        current.kind,
+                      ).map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {folderPath(workspace.requestFolders, f.id)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
               <div className={`document-body ${running ? "locked" : ""}`}>
                 <fieldset disabled={running} className="editor-fieldset">
                   {section === "requests" && (
@@ -487,6 +619,7 @@ export default function Boostman() {
                     <CollectionEditor
                       key={current.id}
                       collection={current as Collection}
+                      requestFolders={workspace.requestFolders}
                       onChange={update}
                       requests={workspace.requests}
                       options={options}
@@ -497,6 +630,7 @@ export default function Boostman() {
                     <FlowEditor
                       key={current.id}
                       flow={current as Flow}
+                      requestFolders={workspace.requestFolders}
                       onChange={update}
                       requests={workspace.requests}
                       connections={workspace.connections}
@@ -617,11 +751,16 @@ export default function Boostman() {
                   disabled={!loaded}
                   onClick={() => add()}
                 >
-                  ＋ 新建{names[section]}
+                  ＋ 新建
+                  {section === "requests"
+                    ? requestKind === "http"
+                      ? " HTTP 请求"
+                      : " SQL 请求"
+                    : names[section]}
                 </button>
                 {section === "requests" && (
-                  <button disabled={!loaded} onClick={() => add("sql")}>
-                    新建 SQL 查询
+                  <button disabled={!loaded || running} onClick={addFolder}>
+                    新建目录
                   </button>
                 )}
               </div>
