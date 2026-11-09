@@ -1,7 +1,25 @@
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Variable.ttf")
+    format("truetype");
+  font-weight: 100 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono/JetBrainsMono-Italic-Variable.ttf")
+    format("truetype");
+  font-style: italic;
+  font-weight: 100 800;
+  font-display: swap;
+}
 :root {
-  font-family: "Noto Sans SC", "Segoe UI", sans-serif;
-  color: #25333d;
-  background: #fff;
+  --app-font:
+    "JetBrains Mono", "Yu Gothic UI", "Noto Sans SC", "Microsoft YaHei",
+    "PingFang SC", "Segoe UI", monospace;
+  font-family: var(--app-font);
+  color: var(--text);
+  background: var(--surface);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -14,6 +32,12 @@
 body {
   margin: 0;
 }
+pre,
+code,
+kbd,
+samp {
+  font-family: inherit;
+}
 button,
 input,
 select,
@@ -23,8 +47,8 @@ textarea {
 }
 button {
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #dce2e6;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px 13px;
   transition:
@@ -32,8 +56,8 @@ button {
     border-color 0.15s;
 }
 button:hover {
-  background: #f1f5f4;
-  border-color: #b8c9c5;
+  background: var(--hover);
+  border-color: var(--border-strong);
 }
 button:disabled {
   cursor: default;
@@ -43,15 +67,15 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #45a28b;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 input,
 textarea,
 select {
-  border: 1px solid #dce2e6;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: #fff;
+  background: var(--surface);
   padding: 9px 11px;
   min-width: 0;
 }
@@ -61,10 +85,10 @@ textarea {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #9ba5ae;
+  color: var(--subtle);
 }
 input[type="checkbox"] {
-  accent-color: #16816d;
+  accent-color: var(--accent);
   width: 15px;
   height: 15px;
 }
@@ -96,8 +120,8 @@ small {
   overflow: hidden;
 }
 .rail {
-  background: #f5f7f8;
-  border-right: 1px solid #e3e7eb;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -107,13 +131,13 @@ small {
 .brand {
   font-size: 35px;
   font-weight: 700;
-  color: #16816d;
+  color: var(--accent);
   letter-spacing: -6px;
   margin-bottom: 26px;
   line-height: 37px;
 }
 .brand span {
-  color: #83bcae;
+  color: var(--accent-dim);
 }
 .rail button {
   width: 62px;
@@ -123,21 +147,20 @@ small {
   flex-direction: column;
   align-items: center;
   gap: 7px;
-  color: #7c8792;
+  color: var(--muted);
   padding: 12px 0;
 }
 .rail button > span {
   font-size: 23px;
   line-height: 24px;
-  font-family: Arial, sans-serif;
 }
 .rail button small {
   font-size: 10px;
   white-space: nowrap;
 }
 .rail button.active {
-  color: #147d68;
-  background: #e5efeb;
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .rail .help-button {
   margin-top: auto;
@@ -145,8 +168,8 @@ small {
 .sidebar {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e2e7eb;
-  background: #fcfdfd;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
   min-width: 0;
 }
 .workspace-label {
@@ -155,18 +178,18 @@ small {
   align-items: center;
   gap: 10px;
   padding: 0 19px;
-  border-bottom: 1px solid #ebeff1;
+  border-bottom: 1px solid var(--border);
 }
 .workspace-avatar {
-  background: #e7eeeb;
-  border: 1px solid #d6e3dd;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
   border-radius: 7px;
   width: 32px;
   height: 34px;
   display: grid;
   place-items: center;
   font-weight: 600;
-  color: #477368;
+  color: var(--accent);
 }
 .workspace-label strong {
   font-size: 12px;
@@ -174,16 +197,14 @@ small {
 }
 .workspace-label small {
   display: block;
-  font:
-    8px "IBM Plex Mono",
-    monospace;
+  font: 8px var(--app-font);
   letter-spacing: 0.5px;
-  color: #9ba4aa;
+  color: var(--subtle);
   margin-top: 5px;
 }
 .local-dot {
   display: inline-block;
-  background: #41a58a;
+  background: var(--success);
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -207,18 +228,18 @@ small {
   border: 0;
   background: transparent;
   font-size: 18px;
-  color: #859099;
+  color: var(--muted);
   line-height: 26px;
 }
 .search {
   margin: 0 15px 20px;
   display: flex;
   align-items: center;
-  border: 1px solid #e4e8ec;
-  background: #f7f9fa;
+  border: 1px solid var(--border);
+  background: var(--inset);
   border-radius: 5px;
   padding-left: 10px;
-  color: #8c98a1;
+  color: var(--muted);
 }
 .search input {
   width: 100%;
@@ -250,39 +271,37 @@ small {
   text-overflow: ellipsis;
 }
 .sidebar-item.selected {
-  background: #eaf3ef;
-  color: #196e5e;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .method {
-  font:
-    bold 10px "IBM Plex Mono",
-    monospace;
+  font: bold 10px var(--app-font);
   min-width: 34px;
-  color: #7d8793;
+  color: var(--muted);
 }
 .method.get {
-  color: #21816b;
+  color: var(--success);
 }
 .method.post {
-  color: #c69537;
+  color: var(--warning);
 }
 .method.delete {
-  color: #c45b54;
+  color: var(--danger);
 }
 .method.sql {
-  color: #6b73aa;
+  color: var(--violet);
 }
 .sidebar-bottom {
   padding: 16px 19px;
-  border-top: 1px solid #e7ecee;
+  border-top: 1px solid var(--border);
   font-size: 10px;
-  color: #939da6;
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .sidebar-empty {
-  color: #a0a8b0;
+  color: var(--subtle);
   text-align: center;
   font-size: 11px;
   line-height: 2;
@@ -300,16 +319,16 @@ small {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e5eaed;
+  border-bottom: 1px solid var(--border);
   padding: 0 28px;
 }
 .breadcrumb {
   font-size: 11px;
-  color: #8c97a0;
+  color: var(--muted);
 }
 .breadcrumb span {
   margin: 0 12px;
-  color: #cbd1d6;
+  color: var(--border);
 }
 .top-actions {
   display: flex;
@@ -321,6 +340,17 @@ small {
   font-size: 11px;
   max-width: 180px;
 }
+.theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.top-actions .theme-picker select {
+  border: 1px solid var(--border);
+  color: var(--text);
+}
 .top-actions button {
   font-size: 11px;
   padding: 6px 13px;
@@ -329,11 +359,11 @@ small {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f0f7f4;
-  color: #52766b;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 11px;
   padding: 5px 24px;
-  border-bottom: 1px solid #e2ece6;
+  border-bottom: 1px solid var(--border);
 }
 .notification .icon {
   font-size: 15px;
@@ -343,7 +373,7 @@ small {
   align-items: center;
   justify-content: space-between;
   padding: 19px 28px;
-  border-bottom: 1px solid #e7ebed;
+  border-bottom: 1px solid var(--border);
   gap: 16px;
   min-height: 80px;
 }
@@ -355,7 +385,7 @@ small {
 }
 .doc-icon {
   font-size: 22px;
-  color: #5e9287;
+  color: var(--accent);
 }
 .doc-title input {
   border: 0;
@@ -369,7 +399,7 @@ small {
 .dirty-dot {
   width: 5px;
   height: 5px;
-  background: #e8ad5c;
+  background: var(--warning);
   border-radius: 50%;
 }
 .document-actions {
@@ -381,15 +411,15 @@ small {
   padding: 10px 16px;
 }
 .primary {
-  background: #18846e;
-  color: #fff;
-  border-color: #18846e;
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
   font-weight: 500;
   padding: 10px 20px;
 }
 .primary:hover {
-  background: #126b59;
-  border-color: #126b59;
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 .primary span {
   font-size: 9px;
@@ -397,19 +427,17 @@ small {
   opacity: 0.8;
 }
 .stop {
-  background: #fcebe8;
-  color: #b74737;
-  border-color: #efd1ca;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: var(--border);
 }
 .badge {
-  font:
-    9px "IBM Plex Mono",
-    monospace;
+  font: 9px var(--app-font);
   letter-spacing: 1px;
-  color: #88969e;
-  background: #f3f6f7;
+  color: var(--muted);
+  background: var(--inset);
   padding: 6px 9px;
-  border: 1px solid #e7ecee;
+  border: 1px solid var(--border);
   border-radius: 4px;
   white-space: nowrap;
 }
@@ -445,7 +473,7 @@ small {
 }
 .field > span {
   font-size: 11px;
-  color: #78858e;
+  color: var(--muted);
 }
 .field input,
 .field select,
@@ -454,19 +482,17 @@ small {
 }
 .url-bar {
   display: flex;
-  border: 1px solid #d8e0e4;
+  border: 1px solid var(--border);
   border-radius: 7px;
-  background: #f9fbfc;
+  background: var(--inset);
   min-height: 48px;
 }
 .url-bar select {
   border: 0;
   background: transparent;
-  border-right: 1px solid #e1e7ea;
-  color: #24866e;
-  font:
-    bold 12px "IBM Plex Mono",
-    monospace;
+  border-right: 1px solid var(--border);
+  color: var(--accent);
+  font: bold 12px var(--app-font);
   width: 104px;
   border-radius: 0;
 }
@@ -474,13 +500,11 @@ small {
   border: 0;
   background: transparent;
   flex: 1;
-  font:
-    12px "IBM Plex Mono",
-    monospace;
+  font: 12px var(--app-font);
 }
 .tabs {
   display: flex;
-  border-bottom: 1px solid #e3e8eb;
+  border-bottom: 1px solid var(--border);
   gap: 23px;
   min-height: 40px;
   padding: 0 1px;
@@ -491,20 +515,20 @@ small {
   background: transparent;
   padding: 9px 1px 12px;
   font-size: 11px;
-  color: #8a949d;
+  color: var(--muted);
   white-space: nowrap;
 }
 .tabs button.active {
-  border-bottom: 2px solid #238b73;
-  color: #237b67;
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent);
 }
 .pair-head {
   font-size: 10px;
-  color: #9aa5ac;
+  color: var(--subtle);
   display: grid;
   grid-template-columns: 1fr 1fr;
   padding: 0 0 9px 4px;
-  border-bottom: 1px solid #e8ecef;
+  border-bottom: 1px solid var(--border);
 }
 .pair-head span {
   padding-left: 14px;
@@ -513,16 +537,14 @@ small {
   display: flex;
   align-items: center;
   gap: 7px;
-  border-bottom: 1px solid #eef1f3;
+  border-bottom: 1px solid var(--border);
   padding: 5px 0;
 }
 .pair-row input:not([type="checkbox"]) {
   border: 0;
   background: transparent;
   width: 40%;
-  font:
-    11px "IBM Plex Mono",
-    monospace;
+  font: 11px var(--app-font);
 }
 .pair-row select {
   font-size: 10px;
@@ -531,7 +553,7 @@ small {
 .subtle {
   border: 0;
   background: transparent;
-  color: #528b7e;
+  color: var(--accent);
   font-size: 11px;
   padding: 10px 1px;
 }
@@ -545,51 +567,48 @@ small {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: #73818c;
+  color: var(--muted);
 }
 .code,
 pre,
 .mono {
-  font-family: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
   font-size: 11px;
 }
 .code {
-  background: #fafcfc;
+  background: var(--inset);
   tab-size: 2;
 }
 .invalid {
-  border-color: #cf6b56;
+  border-color: var(--danger);
 }
 .body-editor {
   margin-top: 10px;
   width: 100%;
 }
 .scripts {
-  border-top: 1px solid #e6ebee;
+  border-top: 1px solid var(--border);
   padding-top: 13px;
   margin-top: 8px;
 }
 details summary {
   cursor: pointer;
-  color: #637680;
+  color: var(--muted);
   font-size: 11px;
   padding: 5px 0 14px;
 }
 details summary > span {
-  font:
-    9px "IBM Plex Mono",
-    monospace;
-  color: #a2aab1;
+  font: 9px var(--app-font);
+  color: var(--subtle);
   margin-left: 10px;
 }
 .response-panel {
-  border-top: 1px solid #dce4e8;
+  border-top: 1px solid var(--border);
   min-height: 260px;
   height: 35%;
   max-height: 45%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--surface);
 }
 .response-panel.is-collapsed {
   flex: 0 0 55px;
@@ -605,7 +624,7 @@ details summary > span {
 .response-toggle {
   padding: 4px 9px;
   font: inherit;
-  color: #5f7d73;
+  color: var(--accent);
   white-space: nowrap;
 }
 .response-content {
@@ -625,7 +644,7 @@ details summary > span {
   padding: 14px 27px;
   min-height: 47px;
   font-size: 11px;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--border);
 }
 .panel-heading strong {
   font-weight: 500;
@@ -636,13 +655,11 @@ details summary > span {
   gap: 18px;
 }
 .metrics {
-  color: #98a2a9;
-  font:
-    10px "IBM Plex Mono",
-    monospace;
+  color: var(--subtle);
+  font: 10px var(--app-font);
 }
 .metrics b {
-  color: #21866b;
+  color: var(--success);
 }
 .response-content > .tabs {
   padding: 0 27px;
@@ -658,26 +675,26 @@ details summary > span {
   overflow: auto;
   flex: 1;
   line-height: 1.8;
-  color: #3d6e67;
+  color: var(--muted);
   white-space: pre-wrap;
   word-break: break-all;
 }
 .response-empty {
   text-align: center;
-  color: #a6afb6;
+  color: var(--subtle);
   margin: auto;
   padding: 12px;
 }
 .response-empty > div {
   font-size: 25px;
-  color: #b3c8c1;
+  color: var(--accent-dim);
   margin-bottom: 10px;
 }
 .response-empty h3 {
   font-size: 12px;
   font-weight: 400;
   margin-bottom: 6px;
-  color: #8d9ba4;
+  color: var(--muted);
 }
 .response-empty p {
   font-size: 10px;
@@ -687,24 +704,24 @@ details summary > span {
   font-size: 9px;
   padding: 3px 7px;
   border-radius: 4px;
-  background: #f3f5f7;
-  color: #788996;
+  background: var(--inset);
+  color: var(--muted);
 }
 .status.succeeded {
-  color: #25856b;
-  background: #eaf5ef;
+  color: var(--success);
+  background: var(--success-soft);
 }
 .status.running {
-  color: #3678ae;
-  background: #edf5ff;
+  color: var(--info);
+  background: var(--info-soft);
 }
 .status.failed {
-  color: #bd5845;
-  background: #fff0eb;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .status.cancelled {
-  color: #a48438;
-  background: #fff6df;
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 .test-list,
 .timeline {
@@ -721,28 +738,28 @@ details summary > span {
   align-items: center;
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #edf0f2;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   border-radius: 0;
   font-size: 10px;
 }
 .timeline-row.active {
-  background: #f1f8f5;
+  background: var(--accent-soft);
 }
 .error {
-  color: #b74c39;
+  color: var(--danger);
 }
 .success {
-  color: #21866b;
+  color: var(--success);
 }
 .error-banner {
-  background: #fff2ec;
-  color: #b8513c;
+  background: var(--danger-soft);
+  color: var(--danger);
   padding: 10px 26px;
   font-size: 11px;
 }
 .muted {
-  color: #98a3ab;
+  color: var(--subtle);
   font-size: 11px;
   line-height: 1.8;
 }
@@ -750,10 +767,10 @@ details summary > span {
   display: flex;
   justify-content: space-between;
   padding: 8px 19px;
-  border-top: 1px solid #e6ebed;
+  border-top: 1px solid var(--border);
   font-size: 9px;
-  color: #9ba5ad;
-  background: #fcfdfd;
+  color: var(--subtle);
+  background: var(--panel);
   min-height: 30px;
 }
 .statusbar .local-dot {
@@ -762,21 +779,19 @@ details summary > span {
   height: 5px;
 }
 .divider {
-  color: #dce2e6;
+  color: var(--border);
   margin: 0 10px;
 }
 .welcome {
   padding: 65px 8%;
   overflow: auto;
   flex: 1;
-  background: radial-gradient(ellipse at 90% 15%, #f0f7f3 0, transparent 45%);
+  background: radial-gradient(ellipse at 90% 15%, var(--accent-soft) 0, transparent 45%);
 }
 .welcome-kicker {
-  font:
-    9px "IBM Plex Mono",
-    monospace;
+  font: 9px var(--app-font);
   letter-spacing: 2.6px;
-  color: #87a297;
+  color: var(--accent);
   margin-bottom: 22px;
 }
 .welcome h1 {
@@ -787,11 +802,11 @@ details summary > span {
   margin-bottom: 18px;
 }
 .welcome h1 span {
-  color: #23856c;
+  color: var(--accent);
 }
 .welcome > p {
   font-size: 12px;
-  color: #929ca4;
+  color: var(--muted);
   line-height: 2.2;
 }
 .welcome-actions {
@@ -806,16 +821,14 @@ details summary > span {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 30px;
-  border-top: 1px solid #e3eae7;
+  border-top: 1px solid var(--border);
   margin-top: 55px;
   padding-top: 24px;
   max-width: 700px;
 }
 .feature-grid b {
-  font:
-    10px "IBM Plex Mono",
-    monospace;
-  color: #85a394;
+  font: 10px var(--app-font);
+  color: var(--accent);
 }
 .feature-grid h3 {
   font-size: 12px;
@@ -824,7 +837,7 @@ details summary > span {
 }
 .feature-grid p {
   font-size: 10px;
-  color: #99a3ab;
+  color: var(--subtle);
   line-height: 2;
 }
 .section-title {
@@ -835,7 +848,7 @@ details summary > span {
 }
 .section-title p {
   font-size: 11px;
-  color: #99a4ac;
+  color: var(--subtle);
   margin: 6px 0;
 }
 .section-title h2 {
@@ -847,14 +860,14 @@ details summary > span {
 }
 .credential-card {
   padding: 24px;
-  background: #f7faf8;
-  border: 1px solid #e2ebe6;
+  background: var(--inset);
+  border: 1px solid var(--border);
   border-radius: 8px;
   margin-top: 30px;
 }
 .credential-card p {
   font-size: 11px;
-  color: #8b9a92;
+  color: var(--muted);
 }
 .inline-add {
   display: flex;
@@ -881,10 +894,10 @@ details summary > span {
 }
 .collection-item {
   padding: 6px 12px;
-  border: 1px solid #e4e9ec;
+  border: 1px solid var(--border);
   border-radius: 6px;
   margin: 10px 0;
-  background: #fdfefe;
+  background: var(--surface);
 }
 .collection-item .item-bar {
   display: flex;
@@ -904,7 +917,7 @@ details summary > span {
   padding: 10px;
 }
 .danger {
-  color: #bd705f;
+  color: var(--danger);
 }
 .flow-workspace {
   display: flex;
@@ -913,8 +926,8 @@ details summary > span {
   min-height: 350px;
 }
 .flow-tools {
-  border-bottom: 1px solid #e7ecef;
-  background: #fcfdfd;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
   padding: 12px 18px;
   display: flex;
   gap: 15px;
@@ -927,7 +940,7 @@ details summary > span {
 }
 .scope > span {
   font-size: 10px;
-  color: #9aa6ae;
+  color: var(--subtle);
 }
 .scope select {
   font-size: 10px;
@@ -942,7 +955,7 @@ details summary > span {
 .palette button {
   font-size: 9px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--surface);
   cursor: grab;
 }
 .palette {
@@ -962,23 +975,23 @@ details summary > span {
   flex: 1;
   position: relative;
   min-width: 0;
-  background: #f8fafb;
+  background: var(--panel);
 }
 .canvas-hint {
   position: absolute;
   left: 16px;
   bottom: 10px;
-  color: #a0adb5;
+  color: var(--subtle);
   font-size: 9px;
   pointer-events: none;
 }
 .node-config {
   width: 300px;
-  border-left: 1px solid #e0e7eb;
+  border-left: 1px solid var(--border);
   overflow: auto;
   padding: 17px;
   flex-shrink: 0;
-  background: white;
+  background: var(--surface);
 }
 .node-config .panel-heading {
   padding: 0 0 12px;
@@ -1000,7 +1013,7 @@ details summary > span {
 .node-config .url-bar select {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid #e3e9ed;
+  border-bottom: 1px solid var(--border);
   font-size: 11px;
 }
 .node-config .url-bar input {
@@ -1029,14 +1042,14 @@ details summary > span {
 }
 .branch-buttons button {
   font-size: 11px;
-  color: #25866f;
+  color: var(--accent);
 }
 .empty-config {
   padding: 40px 24px;
 }
 .empty-config > span {
   font-size: 32px;
-  color: #c3d6ce;
+  color: var(--accent-dim);
 }
 .empty-config h3 {
   font-weight: 500;
@@ -1046,7 +1059,7 @@ details summary > span {
 .empty-config p {
   font-size: 11px;
   line-height: 2;
-  color: #99a4ac;
+  color: var(--subtle);
 }
 .flow-node {
   display: flex;
@@ -1054,15 +1067,15 @@ details summary > span {
   gap: 13px;
   width: 210px;
   padding: 16px;
-  background: #fff;
-  border: 1px solid #dce5e5;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 9px;
   box-shadow: 0 3px 9px #2f4c3b07;
   position: relative;
 }
 .flow-node.selected {
-  border-color: #46a58b;
-  box-shadow: 0 0 0 3px #dceee5;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .flow-node.kind-display {
   width: 350px;
@@ -1070,7 +1083,7 @@ details summary > span {
 }
 .node-display {
   width: 100%;
-  border-top: 1px solid #e4ece9;
+  border-top: 1px solid var(--border);
   padding-top: 10px;
   max-height: 240px;
   overflow: auto;
@@ -1086,14 +1099,14 @@ details summary > span {
 }
 .flow-displays > section {
   min-width: 0;
-  border: 1px solid #e0e9e5;
+  border: 1px solid var(--border);
   padding: 16px;
   border-radius: 8px;
 }
 .flow-displays h3 {
   font-size: 11px;
   overflow-wrap: anywhere;
-  color: #7d8d86;
+  color: var(--muted);
 }
 .display-table {
   overflow: auto;
@@ -1106,7 +1119,7 @@ details summary > span {
 }
 .display-table th,
 .display-table td {
-  border-bottom: 1px solid #e2eae6;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   padding: 7px;
   white-space: pre-wrap;
@@ -1114,7 +1127,7 @@ details summary > span {
   overflow-wrap: anywhere;
 }
 .display-table th {
-  background: #f2f7f5;
+  background: var(--accent-soft);
   position: sticky;
   top: 0;
 }
@@ -1137,12 +1150,12 @@ details summary > span {
   font-size: 16px;
 }
 .display-boolean.yes {
-  color: #16816d;
-  background: #effaf5;
+  color: var(--success);
+  background: var(--success-soft);
 }
 .display-boolean.no {
-  color: #b55a49;
-  background: #fff3ee;
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .display-chart svg {
   width: 100%;
@@ -1155,18 +1168,18 @@ details summary > span {
   min-width: 0;
 }
 .display-chart text {
-  fill: #71877b;
+  fill: var(--muted);
   font-size: 9px;
 }
 .block-entry {
-  border: 1px solid #e2eae6;
+  border: 1px solid var(--border);
   padding: 10px;
   margin: 10px 0;
   border-radius: 6px;
 }
 .validation-report {
   padding: 12px;
-  border: 1px solid #dce6e1;
+  border: 1px solid var(--border);
   border-radius: 6px;
   margin: 12px 0;
   font-size: 11px;
@@ -1177,8 +1190,8 @@ details summary > span {
   margin-right: 7px;
 }
 .node-symbol {
-  background: #edf6f2;
-  color: #3b9178;
+  background: var(--accent-soft);
+  color: var(--accent);
   font-size: 21px;
   border-radius: 6px;
   width: 37px;
@@ -1190,7 +1203,7 @@ details summary > span {
   display: block;
   font-size: 8px;
   letter-spacing: 0.5px;
-  color: #9ca9ad;
+  color: var(--subtle);
   margin-bottom: 5px;
 }
 .flow-node strong {
@@ -1203,16 +1216,16 @@ details summary > span {
   white-space: nowrap;
 }
 .kind-sql .node-symbol {
-  background: #eff0fa;
-  color: #8587b9;
+  background: var(--violet-soft);
+  color: var(--violet);
 }
 .kind-if .node-symbol {
-  background: #fff5e6;
-  color: #c89d50;
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 .kind-evaluate .node-symbol {
-  background: #eaf1fc;
-  color: #7091c6;
+  background: var(--info-soft);
+  color: var(--info);
 }
 .node-state {
   width: 6px;
@@ -1220,25 +1233,34 @@ details summary > span {
   position: absolute;
   right: 9px;
   top: 9px;
-  background: #419e7f;
+  background: var(--success);
   border-radius: 50%;
 }
 .flow-node.failed .node-state {
-  background: #d06751;
+  background: var(--danger);
 }
 .flow-node.running .node-state {
-  background: #5c9ac5;
+  background: var(--info);
   animation: pulse 1s infinite;
 }
 .react-flow__handle {
   width: 7px;
   height: 7px;
-  border: 2px solid #fff;
-  background: #98b5a9;
+  border: 2px solid var(--surface);
+  background: var(--edge);
 }
-.react-flow__edge-path {
-  stroke: #a5bcb3;
-  stroke-width: 1.6;
+.react-flow {
+  --xy-edge-stroke: var(--edge);
+  --xy-edge-stroke-selected: var(--focus);
+  --xy-connectionline-stroke: var(--focus);
+  --xy-background-pattern-color: var(--grid);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--hover);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--inset);
+  --xy-minimap-node-background-color: var(--edge);
+  --xy-minimap-mask-background-color: var(--minimap-mask);
+  --xy-attribution-background-color: var(--surface);
 }
 .react-flow__controls button {
   border-radius: 0;
@@ -1263,10 +1285,10 @@ details summary > span {
 }
 .help-page p {
   font-size: 12px;
-  color: #73858d;
+  color: var(--muted);
 }
 .help-page pre {
-  background: #f3f7f5;
+  background: var(--hover);
   padding: 20px;
   line-height: 2;
 }
@@ -1364,9 +1386,9 @@ details summary > span {
   }
 }
 .execution-options {
-  border-bottom: 1px solid #e7ecef;
+  border-bottom: 1px solid var(--border);
   padding: 0 28px;
-  background: #fcfdfd;
+  background: var(--panel);
 }
 .execution-options summary {
   padding: 7px 0;
@@ -1393,18 +1415,18 @@ details summary > span {
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  background: #fff;
-  border: 1px solid #dedede;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 3px 12px #00000010;
 }
 .flow-mode-label {
-  color: #888;
+  color: var(--muted);
   font-size: 10px;
   white-space: nowrap;
 }
 .flow-workspace .block-picker-toggle {
-  color: #333;
+  color: var(--text);
   border: none;
   font-size: 12px;
   padding: 7px 12px;
@@ -1416,8 +1438,8 @@ details summary > span {
   width: 390px;
   max-height: 430px;
   overflow: auto;
-  background: #fff;
-  border: 1px solid #dedede;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px;
   box-shadow: 0 6px 25px #00000015;
@@ -1441,20 +1463,20 @@ details summary > span {
   padding: 10px;
 }
 .flow-content .canvas {
-  background: #fff;
+  background: var(--surface);
 }
 .flow-block {
   width: 280px;
-  color: #4b4b4b;
-  background: #fff;
-  border: 1px solid #dedede;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 4px;
   box-shadow: 0 1px 3px #00000008;
   font-size: 11px;
 }
 .flow-block.selected {
-  border-color: #8c8c8c;
-  box-shadow: 0 0 0 1px #ddd;
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--border);
 }
 .flow-block.kind-evaluate {
   width: 330px;
@@ -1486,12 +1508,12 @@ details summary > span {
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
-  background: #f4f4f4;
+  background: var(--inset);
   border-radius: 3px 3px 0 0;
   cursor: grab;
 }
 .flow-block-header .block-glyph {
-  color: #888;
+  color: var(--muted);
   font-size: 12px;
   min-width: 15px;
 }
@@ -1508,7 +1530,7 @@ details summary > span {
   border: 0;
   padding: 0 2px;
   font-size: 11px;
-  color: #999;
+  color: var(--subtle);
 }
 .flow-block-header select {
   max-width: 85px;
@@ -1523,30 +1545,30 @@ details summary > span {
   border-radius: 50%;
 }
 .block-status.succeeded {
-  background: #55a988;
+  background: var(--success);
 }
 .block-status.failed {
-  background: #d96565;
+  background: var(--danger);
 }
 .block-status.running {
-  background: #e6a346;
+  background: var(--warning);
 }
 .flow-block.skipped {
   opacity: 0.45;
 }
 .flow-block.failed {
-  border-color: #d8847a;
+  border-color: var(--danger);
 }
 .flow-block.kind-start {
-  border-left: 5px solid #ff7046;
+  border-left: 5px solid var(--highlight);
   width: 245px;
 }
 .flow-block.kind-createVariable .block-glyph,
 .flow-block.kind-getVariable .block-glyph {
-  color: var(--variable-color, #8e63ac);
+  color: var(--variable-color, var(--violet));
 }
 .flow-block.kind-display .block-glyph {
-  color: #ad6b9a;
+  color: var(--violet);
 }
 .flow-block-note {
   position: absolute;
@@ -1554,7 +1576,7 @@ details summary > span {
   left: 0;
   right: 0;
   text-align: center;
-  color: #858585;
+  color: var(--muted);
   font-size: 10px;
   white-space: pre-wrap;
 }
@@ -1567,10 +1589,10 @@ details summary > span {
   width: 100%;
   font-size: 11px;
   padding: 6px 7px;
-  border-color: #e4e4e4;
+  border-color: var(--border);
   border-radius: 3px;
-  background: #fff;
-  color: #444;
+  background: var(--surface);
+  color: var(--text);
 }
 .flow-block-body textarea {
   min-width: 0;
@@ -1582,7 +1604,7 @@ details summary > span {
 }
 .flow-block-body .field > span {
   font-size: 10px;
-  color: #aaa;
+  color: var(--subtle);
 }
 .block-input-row {
   display: flex;
@@ -1596,7 +1618,7 @@ details summary > span {
   min-width: 40px;
   max-width: 95px;
   font-size: 10px;
-  color: #777;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1613,27 +1635,26 @@ details summary > span {
   min-height: 24px;
   padding: 4px 0;
   font-size: 10px;
-  color: #777;
+  color: var(--muted);
 }
 .block-output-row .react-flow__handle {
   right: -14px;
   top: 50%;
 }
 .flow-block .react-flow__handle {
-  border: 1px solid #aaa;
-  background: #fff;
+  border: 1px solid var(--subtle);
+  background: var(--surface);
   width: 6px;
   height: 10px;
   border-radius: 2px;
 }
 .flow-block .react-flow__handle:hover,
 .flow-block .react-flow__handle.connecting {
-  border-color: #ef875a;
-  background: #fff3ec;
+  border-color: var(--highlight);
+  background: var(--highlight-soft);
 }
 .port-type {
-  color: #aaa;
-  font-family: monospace;
+  color: var(--subtle);
   font-size: 10px;
 }
 .block-entry-value,
@@ -1644,7 +1665,7 @@ details summary > span {
 .block-bound-value small {
   display: block;
   font-size: 9px;
-  color: #999;
+  color: var(--subtle);
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1653,7 +1674,7 @@ details summary > span {
 .block-bound-value input {
   padding: 3px 5px;
   font-size: 10px;
-  background: #fafafa;
+  background: var(--inset);
 }
 .block-literal {
   display: flex;
@@ -1661,25 +1682,23 @@ details summary > span {
   gap: 6px;
 }
 .block-literal > span {
-  color: #aaa;
+  color: var(--subtle);
   font-size: 10px;
 }
 .block-null {
   padding: 7px;
-  color: #999;
-  font-family: monospace;
+  color: var(--subtle);
 }
 .block-expression {
   margin: 6px 0;
 }
 .block-expression > small {
-  color: #999;
+  color: var(--subtle);
   font-size: 9px;
   display: block;
   margin-bottom: 5px;
 }
 .block-expression textarea {
-  font-family: Consolas, monospace;
   font-size: 11px;
 }
 .flow-block-body .block-add-row {
@@ -1688,7 +1707,7 @@ details summary > span {
   background: transparent;
   border: 0;
   text-align: left;
-  color: #999;
+  color: var(--subtle);
   font-size: 10px;
 }
 .block-display {
@@ -1698,7 +1717,7 @@ details summary > span {
   padding: 8px 0;
 }
 .block-display > p {
-  color: #bbb;
+  color: var(--subtle);
   font-size: 11px;
   text-align: center;
 }
@@ -1707,7 +1726,7 @@ details summary > span {
 }
 .block-request small {
   display: block;
-  color: #aaa;
+  color: var(--subtle);
   font-size: 9px;
   overflow: hidden;
   white-space: nowrap;
@@ -1724,13 +1743,13 @@ details summary > span {
 }
 .block-conditions label > span {
   font-size: 9px;
-  color: #999;
+  color: var(--subtle);
 }
 .block-conditions button {
   padding: 5px;
   border: 0;
   font-size: 10px;
-  color: #999;
+  color: var(--subtle);
 }
 .block-inline-settings {
   margin: 0;
@@ -1738,13 +1757,13 @@ details summary > span {
 }
 .block-inline-settings summary {
   font-size: 10px;
-  color: #999;
+  color: var(--subtle);
 }
 .block-result {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   margin-top: 5px;
   padding-top: 6px;
-  color: #999;
+  color: var(--subtle);
   font-size: 9px;
 }
 .block-result summary {
@@ -1754,7 +1773,7 @@ details summary > span {
   max-height: 140px;
   overflow: auto;
   font-size: 10px;
-  color: #666;
+  color: var(--text);
   white-space: pre-wrap;
 }
 .block-mini-field {
@@ -1762,7 +1781,7 @@ details summary > span {
   align-items: center;
   gap: 5px;
   font-size: 10px;
-  color: #999;
+  color: var(--subtle);
   margin: 6px 0;
 }
 .run-console {
@@ -1776,9 +1795,9 @@ details summary > span {
   align-items: center;
   gap: 16px;
   padding: 7px 27px;
-  border-bottom: 1px solid #e6ebee;
+  border-bottom: 1px solid var(--border);
   font-size: 10px;
-  color: #82918e;
+  color: var(--muted);
 }
 .console-toolbar select {
   padding: 4px 7px;
@@ -1800,38 +1819,38 @@ details summary > span {
   display: flex;
   gap: 12px;
   padding: 9px 0;
-  border-bottom: 1px solid #f0f3f4;
+  border-bottom: 1px solid var(--border);
 }
 .console-level {
-  font: 10px monospace;
-  color: #448b79;
+  font: 10px var(--app-font);
+  color: var(--accent);
   min-width: 38px;
   padding-top: 3px;
 }
 .console-line small {
-  color: #9aa7ac;
+  color: var(--subtle);
   font-size: 9px;
 }
 .console-line pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  color: #3b5954;
+  color: var(--text);
   line-height: 1.7;
   margin: 4px 0 0;
   font-size: 11px;
 }
 .console-warn .console-level,
 .console-warn pre {
-  color: #aa8133;
+  color: var(--warning);
 }
 .console-error .console-level,
 .console-error pre {
-  color: #bc5946;
+  color: var(--danger);
 }
 .request-kind-tabs {
   display: flex;
   margin: 0 15px 10px;
-  border-bottom: 1px solid #e3eae7;
+  border-bottom: 1px solid var(--border);
   gap: 8px;
 }
 .request-kind-tabs button {
@@ -1841,16 +1860,16 @@ details summary > span {
   background: transparent;
   padding: 9px 5px;
   font-size: 11px;
-  color: #8c989e;
+  color: var(--muted);
 }
 .request-kind-tabs button.active {
-  color: #177d66;
-  border-bottom: 2px solid #258c75;
+  color: var(--accent);
+  border-bottom: 2px solid var(--accent);
 }
 .request-kind-tabs small {
   font-size: 9px;
   margin-left: 5px;
-  color: #9aa9a5;
+  color: var(--subtle);
 }
 .request-tree-tools {
   display: flex;
@@ -1867,13 +1886,14 @@ details summary > span {
   flex: 1;
 }
 .http-transfer-dialog {
+  background: var(--surface);
   width: min(850px, calc(100vw - 48px));
   max-height: calc(100vh - 64px);
   overflow: auto;
-  border: 1px solid #dce2e6;
+  border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
-  color: #25333d;
+  color: var(--text);
   box-shadow: 0 20px 70px #153c3533;
 }
 .http-transfer-dialog::backdrop {
@@ -1893,11 +1913,11 @@ details summary > span {
   margin: 0;
 }
 .http-transfer-dialog p {
-  color: #74818a;
+  color: var(--muted);
   font-size: 12px;
 }
 .http-transfer-dialog .danger {
-  color: #b74737;
+  color: var(--danger);
 }
 .transfer-source {
   display: block;
@@ -1916,14 +1936,14 @@ details summary > span {
   text-align: left;
   font-size: 11px;
   padding: 10px;
-  color: #80978f;
+  color: var(--muted);
   margin-bottom: 5px;
 }
 .request-root.selected,
 .request-folder-row.selected {
-  background: #eaf3ef;
+  background: var(--accent-soft);
   border-radius: 5px;
-  color: #1b7866;
+  color: var(--accent);
 }
 .request-folder-row {
   display: flex;
@@ -1936,7 +1956,7 @@ details summary > span {
   border: 0;
   background: transparent;
   font-size: 12px;
-  color: #97a7a0;
+  color: var(--subtle);
   padding: 4px;
   width: 20px;
   flex-shrink: 0;
@@ -1960,15 +1980,15 @@ details summary > span {
 }
 .request-location {
   padding: 8px 29px;
-  border-bottom: 1px solid #e8eeeb;
-  background: #fcfdfd;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
 }
 .request-location label {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 10px;
-  color: #8a9a92;
+  color: var(--muted);
 }
 .request-location select {
   font-size: 10px;
@@ -1983,7 +2003,7 @@ details summary > span {
 .folder-delete {
   margin-top: 35px;
   padding-top: 20px;
-  border-top: 1px solid #e5eae7;
+  border-top: 1px solid var(--border);
 }
 .folder-delete button {
   font-size: 11px;

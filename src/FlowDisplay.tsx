@@ -73,15 +73,15 @@ export function FlowDisplay({
           role="img"
           aria-label={`折线图，${points.length} 个数据点`}
         >
-          <path d="M30 20V140H300" fill="none" stroke="#cbdad5" />
+          <path d="M30 20V140H300" fill="none" stroke="var(--border-strong)" />
           <polyline
             points={points.map((p, i) => `${x(i)},${y(p.y)}`).join(" ")}
             fill="none"
-            stroke="#16816d"
+            stroke="var(--accent)"
             strokeWidth="2"
           />
           {points.map((p, i) => (
-            <circle key={i} cx={x(i)} cy={y(p.y)} r="3" fill="#16816d">
+            <circle key={i} cx={x(i)} cy={y(p.y)} r="3" fill="var(--accent)">
               <title>
                 {p.x}: {p.y}
               </title>

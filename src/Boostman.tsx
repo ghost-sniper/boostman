@@ -38,6 +38,7 @@ import type {
   DatabaseConnection,
 } from "./model";
 import "./App.css";
+import "./themes.css";
 type Section =
   "requests" | "collections" | "flows" | "connections" | "environments";
 const names: Record<Section, string> = {
@@ -47,7 +48,24 @@ const names: Record<Section, string> = {
   connections: "数据库",
   environments: "环境与凭据",
 };
+const themes = [
+  ["light", "浅色"],
+  ["dark", "深色"],
+  ["cyberpunk", "赛博朋克 2077"],
+  ["eva", "EVA 初号机"],
+] as const;
+type Theme = (typeof themes)[number][0];
+const themeKey = "boostman.theme";
+
 export default function Boostman() {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem(themeKey);
+    return themes.find(([id]) => id === saved)?.[0] ?? "light";
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(themeKey, theme);
+  }, [theme]);
   const [resultsCollapsed, setResultsCollapsed] = useState(false);
   const [transfer, setTransfer] = useState<"import" | "export" | null>(null);
   const [requestKind, setRequestKind] = useState<Request["kind"]>("http");
@@ -421,6 +439,20 @@ export default function Boostman() {
               工作区 <span>/</span> {names[section]}
             </div>
             <div className="top-actions">
+              <label className="theme-picker">
+                主题
+                <select
+                  aria-label="主题"
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value as Theme)}
+                >
+                  {themes.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <select
                 aria-label="运行环境"
                 value={environmentId}

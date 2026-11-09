@@ -442,14 +442,14 @@ export function FlowEditor({
             fitViewOptions={{ maxZoom: 1, padding: 0.18 }}
             defaultEdgeOptions={{
               type: "default",
-              style: { stroke: "#a0a0a0", strokeWidth: 1.25 },
+              style: { strokeWidth: 1.25 },
             }}
             minZoom={0.2}
             deleteKeyCode={["Backspace", "Delete"]}
           >
-            <Background gap={16} size={1} color="#e6e6e6" />
+            <Background gap={16} size={1} />
             <Controls />
-            <MiniMap nodeColor="#d9e7e4" maskColor="#f7f9facc" />
+            <MiniMap />
           </ReactFlow>
           <div className="canvas-hint">
             拖动节点排列 · 连线控制执行顺序 · 选中连线后按 Delete 删除
