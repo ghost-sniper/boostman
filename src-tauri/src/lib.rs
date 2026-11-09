@@ -9,6 +9,7 @@ mod oracle_adapter;
 mod request_folders;
 mod scripts;
 mod sql;
+mod sql_placeholders;
 mod store;
 #[cfg(test)]
 mod tags_workflow_tests;

@@ -14,11 +14,13 @@ export function JsonEditor({
   value,
   onChange,
   label,
+  describedBy,
   rows = 5,
 }: {
   value: any;
   onChange: (v: any) => void;
   label?: string;
+  describedBy?: string;
   rows?: number;
 }) {
   const id = useId(),
@@ -42,6 +44,7 @@ export function JsonEditor({
     <label className="field json-field">
       {label && <span>{label}</span>}
       <textarea
+        aria-describedby={describedBy}
         spellCheck={false}
         rows={rows}
         className={error ? "invalid code" : "code"}
@@ -150,6 +153,17 @@ export function Pairs({
     </div>
   );
 }
+const sqlParameterExamples = [
+  ["string", "字符串", "active"],
+  ["i64", "有符号整数", "1"],
+  ["u64", "无符号整数", "1"],
+  ["f64", "浮点数", 1.25],
+  ["bool", "布尔值", true],
+  ["decimal", "精确小数", "1.20"],
+  ["json", "JSON 对象或数组", { enabled: true }],
+  ["bytes", "Base64 二进制", "AP8="],
+] as const;
+
 export function RequestEditor({
   request: r,
   onChange,
@@ -162,6 +176,7 @@ export function RequestEditor({
   compact?: boolean;
 }) {
   const [tab, setTab] = useState("params");
+  const parameterHint = useId();
   const set = (p: Data) => onChange({ ...r, ...p });
   const body = r.body || { type: "none" };
   const auth = r.auth || { type: "none" };
@@ -212,9 +227,7 @@ export function RequestEditor({
             />
           </div>
           <label className="field">
-            <span>
-              SQL · PostgreSQL 使用 $1，MySQL 使用 ?，Oracle 使用 :1、:2
-            </span>
+            <span>SQL · 通用参数 $1、$2，也支持 MySQL ? 和 Oracle :1、:2</span>
             <textarea
               rows={7}
               className="code"
@@ -222,11 +235,44 @@ export function RequestEditor({
               onChange={(e) => set({ sql: e.target.value })}
             />
           </label>
-          <JsonEditor
-            label="绑定参数（JSON 数组）；精确值示例：[{“type”:“decimal”,“value”:“1.20”}]"
-            value={r.params || []}
-            onChange={(params) => set({ params })}
-          />
+          <div className="sql-parameters">
+            <JsonEditor
+              label="绑定参数（JSON 数组）"
+              describedBy={parameterHint}
+              value={r.params || []}
+              onChange={(params) => set({ params })}
+            />
+            <p id={parameterHint} className="muted">
+              <code>$1</code> 对应数组第一个值。可直接填写数字、字符串、布尔值或
+              null，例如 <code>[1, "active", true, null]</code>。
+              {connections.find((c) => c.id === r.connectionId)?.driver ===
+                "postgres" && (
+                <>
+                  {" "}
+                  PostgreSQL 按 SQL 推断的类型绑定。<code>
+                    INT4
+                  </code> 列可直接传 <code>[1]</code>。
+                </>
+              )}
+            </p>
+            <details className="sql-parameter-help">
+              <summary>参数类型与 JSON 示例</summary>
+              <p>
+                以下示例是数组中的单个值。大整数和精确小数的 <code>value</code>{" "}
+                用字符串填写，以保留精度。
+              </p>
+              <ul>
+                {sqlParameterExamples.map(([type, name, value]) => (
+                  <li key={type}>
+                    {name} <code>{JSON.stringify({ type, value })}</code>
+                  </li>
+                ))}
+                <li>
+                  带类型的空值 <code>{'{"type":"i64","value":null}'}</code>
+                </li>
+              </ul>
+            </details>
+          </div>
         </>
       ) : (
         <>

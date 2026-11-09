@@ -54,7 +54,7 @@ fn integration(driver: &str, variable: &str) {
             &AtomicBool::new(false),
         ))
     };
-    query(format!("CREATE TABLE {} (id BIGINT PRIMARY KEY, amount DECIMAL(30,10), processed BOOLEAN, note VARCHAR(100))",fixture.table),json!([])).unwrap();
+    query(format!("CREATE TABLE {} (id INTEGER PRIMARY KEY, amount DECIMAL(30,10), processed BOOLEAN, note VARCHAR(100))",fixture.table),json!([])).unwrap();
     let marks = if driver == "postgres" {
         "$1,$2,$3,$4"
     } else {
@@ -69,6 +69,35 @@ fn integration(driver: &str, variable: &str) {
             json!([id,{"type":"decimal","value":"9007199254740992.1234567890"},false,null]),
         )
         .unwrap();
+    }
+    let by_id = format!("SELECT id FROM {} WHERE id = $1", fixture.table);
+    for params in [json!([1]), json!([{"type":"u64","value":"1"}])] {
+        let result = query(by_id.clone(), params).unwrap();
+        assert_eq!(result["data"]["rows"], json!([{"id":1}]));
+    }
+    let reordered = query(
+        "SELECT $2 AS second, $1 AS first, $1 AS repeated".into(),
+        json!(["one", "two"]),
+    )
+    .unwrap();
+    assert_eq!(
+        reordered["data"]["rows"],
+        json!([{"second":"two","first":"one","repeated":"one"}])
+    );
+    if driver == "postgres" {
+        let converted = query(
+            "SELECT $1::smallint AS small, $2::real AS fraction, $3::json AS document, $4::bytea AS bytes, $5::date AS day".into(),
+            json!(["-2", 1.25, {"type":"json","value":{"ok":true}}, "AP8=", "2026-11-09"]),
+        ).unwrap();
+        assert_eq!(
+            converted["data"]["rows"],
+            json!([{"small":-2,"fraction":1.25,"document":{"ok":true},"bytes":"AP8=","day":"2026-11-09"}])
+        );
+        assert!(
+            query(by_id, json!([2_147_483_648_u64]))
+                .unwrap_err()
+                .contains("参数 $1 无法转换为 PostgreSQL INT4")
+        );
     }
     let got = query(
         format!("SELECT id,amount,note FROM {} ORDER BY id", fixture.table),
@@ -275,6 +304,12 @@ fn oracle_end_to_end() {
         repeated["data"]["rows"][0],
         json!({"second":22,"first":11,"again":11})
     );
+    let portable = query(
+        format!("SELECT id AS \"id\" FROM {} WHERE id = $1", fixture.table),
+        json!([{"type":"u64","value":"1"}]),
+    )
+    .unwrap();
+    assert_eq!(portable["data"]["rows"], json!([{"id":1}]));
     assert!(
         query(
             format!(

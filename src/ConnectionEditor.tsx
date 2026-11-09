@@ -88,7 +88,7 @@ export function ConnectionEditor({
           <p className="muted">
             需要与应用架构一致的 Oracle Instant Client Basic（建议 19c
             或更新版本），配置 PATH 后重启应用。参数使用
-            :1、:2，查询示例：SELECT 1 FROM dual。
+            $1、$2 或 :1、:2，查询示例：SELECT 1 FROM dual。
           </p>
         </details>
       )}

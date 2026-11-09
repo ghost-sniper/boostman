@@ -1,8 +1,11 @@
+use crate::sql_placeholders::{self, Dialect};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures_util::TryStreamExt;
 use serde_json::{Map, Value, json};
-use sqlx::{Column, Connection, Either, Executor, Row, TypeInfo, ValueRef};
+use sqlx::{Column, Connection, Either, Executor, Row, Statement, TypeInfo, ValueRef};
 use std::{collections::HashSet, str::FromStr, sync::atomic::AtomicBool, time::Instant};
+#[path = "sql_pg_params.rs"]
+mod pg_params;
 fn connection(c: &Value) -> Result<(String, String, u16, String, String, String), String> {
     let config = crate::db_config::ConnectionConfig::read(c)?;
     config.validate()?;
@@ -26,6 +29,14 @@ pub async fn test(c: &Value) -> Result<(), String> {
 }
 pub async fn execute(r: &Value, c: &Value, cancel: &AtomicBool) -> Result<Value, String> {
     if c["driver"] == "oracle" {
+        if let (Some(sql), Some(params)) = (r["sql"].as_str(), r["params"].as_array()) {
+            let (sql, _) = sql_placeholders::adapt(sql, params, Dialect::Oracle)?;
+            if let std::borrow::Cow::Owned(sql) = sql {
+                let mut request = r.clone();
+                request["sql"] = json!(sql);
+                return crate::oracle_adapter::execute(&request, c, cancel).await;
+            }
+        }
         return crate::oracle_adapter::execute(r, c, cancel).await;
     }
     crate::http::cancellable(cancel, crate::http::timeout(r), run(r, c)).await
@@ -137,7 +148,7 @@ fn my_row(row: &sqlx::mysql::MySqlRow) -> Result<Value, String> {
 }
 // Typed parameters permit exact decimals and typed NULL without embedding values in SQL.
 macro_rules! bind_params {
-    ($q:ident,$params:ident) => {
+    ($q:ident,$params:expr) => {
         for p in $params {
             let typed = p.get("type").and_then(Value::as_str);
             let v = if typed.is_some() { &p["value"] } else { p };
@@ -149,6 +160,15 @@ macro_rules! bind_params {
                         v.as_i64()
                             .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
                             .ok_or("i64 参数无效")?,
+                    )
+                }),
+                Some("u64") => $q.bind(if v.is_null() {
+                    None
+                } else {
+                    Some(
+                        v.as_u64()
+                            .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+                            .ok_or("u64 参数无效")?,
                     )
                 }),
                 Some("f64") => $q.bind(if v.is_null() {
@@ -185,7 +205,15 @@ macro_rules! bind_params {
                             .map_err(|e| e.to_string())?,
                     )
                 }),
-                Some("string") => $q.bind(if v.is_null(){None}else{Some(v.as_str().ok_or("string 参数必须为字符串或 null")?.to_owned())}),
+                Some("string") => $q.bind(if v.is_null() {
+                    None
+                } else {
+                    Some(
+                        v.as_str()
+                            .ok_or("string 参数必须为字符串或 null")?
+                            .to_owned(),
+                    )
+                }),
                 Some(other) => return Err(format!("未知参数类型 {other}")),
                 None => match v {
                     Value::Null => $q.bind(Option::<String>::None),
@@ -193,8 +221,8 @@ macro_rules! bind_params {
                     Value::Number(n) => {
                         if let Some(i) = n.as_i64() {
                             $q.bind(i)
-                        } else if n.is_u64() {
-                            return Err("整数参数超出 i64 范围，请使用 decimal 类型的字符串参数".into());
+                        } else if let Some(i) = n.as_u64() {
+                            $q.bind(i)
                         } else {
                             $q.bind(n.as_f64().ok_or("数字参数无效")?)
                         }
@@ -230,14 +258,12 @@ async fn run(r: &Value, c: &Value) -> Result<Value, String> {
             let mut conn = sqlx::PgConnection::connect_with(&options)
                 .await
                 .map_err(|e| e.to_string())?;
-            cols = columns(
-                conn.describe(sql)
-                    .await
-                    .map_err(|e| e.to_string())?
-                    .columns(),
-            )?;
-            let mut q = sqlx::query(sql);
-            bind_params!(q, params);
+            let statement = conn.prepare(sql).await.map_err(|e| e.to_string())?;
+            cols = columns(statement.columns())?;
+            let Some(Either::Left(types)) = statement.parameters() else {
+                return Err("无法读取 PostgreSQL 参数类型".into());
+            };
+            let q = pg_params::bind(statement.query(), params, types)?;
             #[allow(deprecated)]
             let mut stream = q.fetch_many(&mut conn);
             while let Some(next) = stream.try_next().await.map_err(|e| e.to_string())? {
@@ -262,14 +288,31 @@ async fn run(r: &Value, c: &Value) -> Result<Value, String> {
             let mut conn = sqlx::MySqlConnection::connect_with(&options)
                 .await
                 .map_err(|e| e.to_string())?;
+            let (sql, params) = if sql.contains('$') && !params.is_empty() {
+                let mode: String = sqlx::query_scalar("SELECT @@SESSION.sql_mode")
+                    .fetch_one(&mut conn)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let has_mode = |name| mode.split(',').any(|value| value == name);
+                sql_placeholders::adapt(
+                    sql,
+                    params,
+                    Dialect::Mysql {
+                        backslash_escapes: !has_mode("NO_BACKSLASH_ESCAPES"),
+                        ansi_quotes: has_mode("ANSI_QUOTES"),
+                    },
+                )?
+            } else {
+                (sql.into(), params.as_slice().into())
+            };
             cols = columns(
-                conn.describe(sql)
+                conn.describe(&sql)
                     .await
                     .map_err(|e| e.to_string())?
                     .columns(),
             )?;
-            let mut q = sqlx::query(sql);
-            bind_params!(q, params);
+            let mut q = sqlx::query(&sql);
+            bind_params!(q, params.iter());
             #[allow(deprecated)]
             let mut stream = q.fetch_many(&mut conn);
             while let Some(next) = stream.try_next().await.map_err(|e| e.to_string())? {

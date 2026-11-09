@@ -124,15 +124,13 @@ fn bind(stmt: &mut Statement, params: &[Value]) -> Result<(), String> {
             Value::Null | Value::String(_) => "string",
             Value::Bool(_) => "bool",
             Value::Number(n) if n.is_i64() => "i64",
-            Value::Number(n) if n.is_u64() => {
-                return Err("整数超出 i64 范围，请使用 decimal 字符串参数".into());
-            }
+            Value::Number(n) if n.is_u64() => "u64",
             Value::Number(_) => "f64",
             _ => return Err("对象/数组参数请使用 {type:json,value:...}".into()),
         });
         let oracle_type = match kind {
             "string" => OracleType::Varchar2(1),
-            "i64" | "decimal" => OracleType::Number(0, 0),
+            "i64" | "u64" | "decimal" => OracleType::Number(0, 0),
             "f64" => OracleType::BinaryDouble,
             "bool" => OracleType::Number(1, 0),
             "bytes" => OracleType::Raw(1),
@@ -150,6 +148,13 @@ fn bind(stmt: &mut Statement, params: &[Value]) -> Result<(), String> {
                         .as_i64()
                         .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
                         .ok_or("i64 参数无效")?,
+                ),
+                "u64" => stmt.bind(
+                    i,
+                    &value
+                        .as_u64()
+                        .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+                        .ok_or("u64 参数无效")?,
                 ),
                 "f64" => stmt.bind(i, &value.as_f64().ok_or("f64 参数无效")?),
                 "bool" => stmt.bind(i, &i32::from(value.as_bool().ok_or("bool 参数无效")?)),

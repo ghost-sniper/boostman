@@ -480,6 +480,25 @@ small {
 .field textarea {
   width: 100%;
 }
+.sql-parameters .field {
+  margin-bottom: 6px;
+}
+.sql-parameters p,
+.sql-parameter-help ul {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.sql-parameter-help summary {
+  color: var(--accent);
+  padding-bottom: 5px;
+}
+.sql-parameter-help ul {
+  padding-inline-start: 18px;
+}
+.sql-parameters code {
+  overflow-wrap: anywhere;
+}
 .url-bar {
   display: flex;
   border: 1px solid var(--border);
@@ -786,7 +805,11 @@ details summary > span {
   padding: 65px 8%;
   overflow: auto;
   flex: 1;
-  background: radial-gradient(ellipse at 90% 15%, var(--accent-soft) 0, transparent 45%);
+  background: radial-gradient(
+    ellipse at 90% 15%,
+    var(--accent-soft) 0,
+    transparent 45%
+  );
 }
 .welcome-kicker {
   font: 9px var(--app-font);

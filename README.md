@@ -20,6 +20,24 @@ npm run tauri build
 
 `npm run dev` 只启动界面预览，不提供浏览器网络执行或工作区保存。实际请求、SQL、FQL 和脚本都通过桌面 Rust 核心执行。`package-lock.json` 和 `src-tauri/Cargo.lock` 固定依赖。
 
+## 本地生成可执行文件
+
+Windows PowerShell：
+
+```powershell
+.\scripts\build.ps1
+```
+
+Linux 或 macOS 的 Bash（Windows 上也可使用 Git Bash）：
+
+```bash
+bash ./scripts/build.sh
+```
+
+脚本识别本机操作系统和 x86_64 / ARM64 架构，使用 `rustup` 补齐目标，并通过 `npm ci` 安装锁定的依赖。构建使用项目的 Release O3 + LTO 配置。默认输出到 `src-tauri/target/<目标>/release/`，Windows 程序名为 `boostman.exe`，Linux 和 macOS 为 `boostman`。脚本结束时会打印实际输出路径。
+
+构建前需安装 Node.js、npm、rustup 和对应平台的 [Tauri 系统依赖](https://v2.tauri.app/start/prerequisites/)。Windows ARM64 需要 MSVC ARM64 构建工具，Linux 使用 GNU 目标并需要 WebKitGTK 4.1。在 Windows 上请先关闭本项目的开发或预览服务，以便更新前端依赖。脚本生成单独的程序文件，安装包由下方工作流生成。
+
 ## GitHub Actions 构建
 
 工作流 `.github/workflows/build.yml` 在推送 `main`、`v*` 标签、针对 `main` 的 PR 或手动运行时执行。使用 Node.js 24 和 Rust 1.99.1，先检查格式、前端类型与构建、连接配置及安装包校验测试、Rust 检查和核心测试，再以 Release O3 + LTO 构建安装包。
@@ -74,7 +92,9 @@ SQL `data` 为 `{rows, columns, affectedRows}`。空查询仍保留列信息。N
 ]
 ```
 
-可用类型：`string`、`i64`、`f64`、`bool`、`decimal`、`json`、`bytes`（Base64）。SQL 文本不进行变量拼接，动态参数使用参数数组或 FQL `bindings.params`。
+PostgreSQL、MySQL、Oracle 均可使用 `$1`、`$2` 按序引用参数，例如 `WHERE id = $1` 搭配 `[1]`。MySQL 的 `?` 和 Oracle 的 `:1`、`:2` 仍可用。同一条语句使用一种占位符写法。数据库专属语法和函数遵循各自方言。
+
+PostgreSQL 按预备语句返回的参数类型绑定数据，例如 `INT4` 直接接收 JSON 整数 `1`。数值超出目标类型范围时会报告参数位置。可用类型包括 `string`、`i64`、`u64`、`f64`、`bool`、`decimal`、`json`、`bytes`（Base64）。大整数和精确小数可用字符串保存原始精度。SQL 文本不进行变量拼接，动态参数使用参数数组或 FQL `bindings.params`。
 
 新建 Flows 保存 `executionMode: "dataflow"`，执行由真实端口连线驱动：输出可连接多个组件，每个输入最多一条线，多个已连接输入全部到达后执行。If/Condition/Validate 只向匹配端口发送数据，未选路径标记跳过；OR 从两个输入中选择先到达的数据，不等待另一路，保留 false/null。调度器按确定性顺序执行，不进行网络请求的并行竞速；禁止任意回边，重复执行使用循环组件。数据常量及 Start 在运行开始时提供数据，Start 卡片可以配置运行输入。
 
